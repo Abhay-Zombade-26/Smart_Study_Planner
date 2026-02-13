@@ -12,11 +12,11 @@ service\NormalPlanGenerator.class
 ui\GitHubProgressFrame.class
 service\ITPlanGenerator.class
 ui\ITStudyPlannerFrame.class
-ui\LoginFrame$1$1.class
 dao\UserDAO.class
 dao\GitHubActivityDAO.class
 db\DBConnection.class
 enums\UserRole.class
+ui\LoginFrame$2.class
 util\JsonUtil.class
 model\User.class
 dao\StudyTaskDAO.class

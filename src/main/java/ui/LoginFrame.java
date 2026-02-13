@@ -11,6 +11,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import com.sun.net.httpserver.HttpServer;
@@ -22,10 +23,14 @@ public class LoginFrame extends JFrame {
     private JPanel mainPanel;
     private JButton googleLoginBtn;
     private JButton githubLoginBtn;
+    private HttpServer server;
+    private boolean serverStarted = false;
     
     public LoginFrame() {
         initUI();
         setupEventListeners();
+        // Start server in background thread
+        new Thread(this::startOAuthServer).start();
     }
     
     private void initUI() {
@@ -140,111 +145,198 @@ public class LoginFrame extends JFrame {
     }
     
     private void setupEventListeners() {
-        googleLoginBtn.addActionListener(e -> handleGoogleLogin());
-        githubLoginBtn.addActionListener(e -> handleGitHubLogin());
-    }
-    
-    private void handleGoogleLogin() {
-        String url = new GoogleAuthService().getAuthorizationUrl();
-        startOAuthServer("GOOGLE", url);
-    }
-    
-    private void handleGitHubLogin() {
-        String url = new GitHubAuthService().getAuthorizationUrl();
-        startOAuthServer("GITHUB", url);
-    }
-    
-    private void startOAuthServer(String provider, String authUrl) {
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            private HttpServer server;
-            
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    server = HttpServer.create(new InetSocketAddress(8888), 0);
-                    
-                    String contextPath = provider.equals("GOOGLE") ? "/callback" : "/github-callback";
-                    
-                    server.createContext(contextPath, new HttpHandler() {
-                        @Override
-                        public void handle(HttpExchange exchange) throws IOException {
-                            String query = exchange.getRequestURI().getQuery();
-                            String code = null;
-                            
-                            if (query != null && query.contains("code=")) {
-                                code = query.split("code=")[1].split("&")[0];
-                            }
-                            
-                            String response = 
-                                "<html>" +
-                                "<body style='font-family: sans-serif; text-align: center; padding-top: 50px;'>" +
-                                "    <h2>Authentication Successful!</h2>" +
-                                "    <p>You can close this window and return to the application.</p>" +
-                                "</body>" +
-                                "</html>";
-                            
-                            exchange.sendResponseHeaders(200, response.length());
-                            try (OutputStream os = exchange.getResponseBody()) {
-                                os.write(response.getBytes());
-                            }
-                            
-                            if (code != null) {
-                                final String authCode = code;
-                                final HttpServer currentServer = server;
-                                SwingUtilities.invokeLater(() -> {
-                                    authenticateUser(provider, authCode);
-                                    currentServer.stop(0);
-                                });
-                            }
-                        }
-                    });
-                    
-                    server.setExecutor(null);
-                    server.start();
-                    
-                    // Open browser
-                    try {
-                        Desktop.getDesktop().browse(new URI(authUrl));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        SwingUtilities.invokeLater(() -> 
-                            JOptionPane.showMessageDialog(LoginFrame.this,
-                                "Failed to open browser. Please visit:\n" + authUrl,
-                                "Open URL Manually",
-                                JOptionPane.INFORMATION_MESSAGE)
-                        );
-                    }
-                    
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    SwingUtilities.invokeLater(() -> 
-                        JOptionPane.showMessageDialog(LoginFrame.this,
-                            "Failed to start authentication server",
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE)
-                    );
-                }
-                return null;
+        googleLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                String url = new GoogleAuthService().getAuthorizationUrl();
+                openBrowser(url);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Starting authentication server... Please try again in 2 seconds.",
+                    "Server Starting",
+                    JOptionPane.INFORMATION_MESSAGE);
             }
-        };
+        });
         
-        worker.execute();
+        githubLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                String url = new GitHubAuthService().getAuthorizationUrl();
+                openBrowser(url);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Starting authentication server... Please try again in 2 seconds.",
+                    "Server Starting",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+    }
+    
+    private void startOAuthServer() {
+        int maxAttempts = 3;
+        int attempt = 0;
+        
+        while (attempt < maxAttempts && !serverStarted) {
+            try {
+                attempt++;
+                System.out.println("Attempt " + attempt + " to start server on port 8888...");
+                
+                // Always use port 8888
+                server = HttpServer.create(new InetSocketAddress("localhost", 8888), 0);
+                
+                // Google callback
+                server.createContext("/callback", new HttpHandler() {
+                    @Override
+                    public void handle(HttpExchange exchange) throws IOException {
+                        handleOAuthCallback(exchange, "GOOGLE");
+                    }
+                });
+                
+                // GitHub callback
+                server.createContext("/github-callback", new HttpHandler() {
+                    @Override
+                    public void handle(HttpExchange exchange) throws IOException {
+                        handleOAuthCallback(exchange, "GITHUB");
+                    }
+                });
+                
+                server.setExecutor(null);
+                server.start();
+                serverStarted = true;
+                
+                System.out.println("✅ OAuth server started successfully on port 8888");
+                System.out.println("📎 Google callback: http://localhost:8888/callback");
+                System.out.println("📎 GitHub callback: http://localhost:8888/github-callback");
+                
+            } catch (BindException e) {
+                System.err.println("❌ Port 8888 is already in use (attempt " + attempt + ")");
+                
+                // Try to kill the process using port 8888
+                try {
+                    Process process = Runtime.getRuntime().exec("cmd /c netstat -ano | findstr :8888");
+                    java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(process.getInputStream())
+                    );
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.contains("LISTENING")) {
+                            String[] parts = line.trim().split("\\s+");
+                            String pid = parts[parts.length - 1];
+                            Runtime.getRuntime().exec("taskkill /F /PID " + pid);
+                            System.out.println("✅ Killed process with PID: " + pid);
+                            Thread.sleep(1000); // Wait for process to die
+                        }
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                
+            } catch (IOException e) {
+                System.err.println("❌ Failed to start server: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        if (!serverStarted) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(this,
+                    "Failed to start authentication server after " + maxAttempts + " attempts.\n" +
+                    "Please make sure port 8888 is available and try restarting the application.",
+                    "Server Error",
+                    JOptionPane.ERROR_MESSAGE);
+            });
+        }
+    }
+    
+    private void handleOAuthCallback(HttpExchange exchange, String provider) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String code = null;
+        
+        if (query != null && query.contains("code=")) {
+            code = query.split("code=")[1].split("&")[0];
+        }
+        
+        String response = 
+            "<html>" +
+            "<body style='font-family: sans-serif; text-align: center; padding-top: 50px;'>" +
+            "    <h2 style='color: #2ecc71;'>✅ Authentication Successful!</h2>" +
+            "    <p>You can close this window and return to the application.</p>" +
+            "</body>" +
+            "</html>";
+        
+        exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+        exchange.sendResponseHeaders(200, response.getBytes("UTF-8").length);
+        
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(response.getBytes("UTF-8"));
+            os.flush();
+        }
+        
+        if (code != null) {
+            final String authCode = code;
+            SwingUtilities.invokeLater(() -> {
+                authenticateUser(provider, authCode);
+            });
+        }
+        
+        exchange.close();
+    }
+    
+    private void openBrowser(String url) {
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(new URI(url));
+            } else {
+                // Fallback for systems without Desktop support
+                String os = System.getProperty("os.name").toLowerCase();
+                Runtime rt = Runtime.getRuntime();
+                if (os.contains("win")) {
+                    rt.exec("rundll32 url.dll,FileProtocolHandler " + url);
+                } else if (os.contains("mac")) {
+                    rt.exec("open " + url);
+                } else if (os.contains("nix") || os.contains("nux")) {
+                    rt.exec("xdg-open " + url);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "<html>Failed to open browser automatically.<br>" +
+                "Please visit this URL manually:<br><br>" +
+                "<b>" + url + "</b></html>",
+                "Open URL Manually",
+                JOptionPane.INFORMATION_MESSAGE);
+        }
     }
     
     private void authenticateUser(String provider, String code) {
         User user = null;
         AuthService authService;
         
-        if (provider.equals("GOOGLE")) {
-            authService = new GoogleAuthService();
-            user = authService.authenticate(code);
-        } else {
-            authService = new GitHubAuthService();
-            user = authService.authenticate(code);
+        try {
+            if (provider.equals("GOOGLE")) {
+                authService = new GoogleAuthService();
+                user = authService.authenticate(code);
+            } else {
+                authService = new GitHubAuthService();
+                user = authService.authenticate(code);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Authentication failed: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+            return;
         }
         
         if (user != null) {
+            // Stop the server before disposing
+            if (server != null) {
+                server.stop(0);
+                serverStarted = false;
+                System.out.println("🛑 OAuth server stopped");
+            }
             dispose();
+            
             if (provider.equals("GOOGLE")) {
                 new NormalStudyPlannerFrame(user).setVisible(true);
             } else {
@@ -252,9 +344,19 @@ public class LoginFrame extends JFrame {
             }
         } else {
             JOptionPane.showMessageDialog(this,
-                "Authentication failed. Please try again.",
+                "Authentication failed. Please check your OAuth credentials in config.properties",
                 "Error",
                 JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    @Override
+    public void dispose() {
+        if (server != null) {
+            server.stop(0);
+            serverStarted = false;
+            System.out.println("🛑 OAuth server stopped");
+        }
+        super.dispose();
     }
 }
