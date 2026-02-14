@@ -7,8 +7,8 @@ C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\ui\LoginFrame.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\model\StudyTask.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\GoogleAuthService.java
+C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\config\Auth0Config.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\AnalysisService.java
-C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\GitHubAuthService.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\util\HttpUtil.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\app\Main.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\ui\DashboardFrame.java
@@ -26,6 +26,8 @@ C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\db\DBConnection.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\util\ValidationUtil.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\enums\UserRole.java
+C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\GitHubOAuthService.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\ui\GitHubProgressFrame.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\AuthService.java
+C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\service\Auth0Service.java
 C:\Users\abhay\OneDrive\Desktop\PP-miniproject\Smart_Study_Planner\src\main\java\util\JsonUtil.java

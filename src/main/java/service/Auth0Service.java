@@ -1,4 +1,5 @@
 package service;
+//i am on main branch
 
 import config.AppConfig;
 import dao.UserDAO;
@@ -16,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-public class GitHubAuthService implements AuthService {
+public class Auth0Service  implements AuthService {
     
     private static final String GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
     private static final String GITHUB_USER_URL = "https://api.github.com/user";
