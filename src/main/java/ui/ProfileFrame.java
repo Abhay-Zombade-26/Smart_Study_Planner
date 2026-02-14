@@ -194,9 +194,18 @@ public class ProfileFrame extends JPanel {
         saveBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         saveBtn.addActionListener(e -> {
-            user.setName(nameField.getText());
-            userDAO.update(user);
-            JOptionPane.showMessageDialog(this, "Profile updated successfully!");
+            String newName = nameField.getText().trim();
+            if (!newName.isEmpty()) {
+                user.setName(newName);
+                boolean updated = userDAO.update(user);
+                if (updated) {
+                    JOptionPane.showMessageDialog(this, "Profile updated successfully!");
+                } else {
+                    JOptionPane.showMessageDialog(this, "Failed to update profile.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Name cannot be empty.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            }
         });
 
         panel.add(saveBtn, gbc);

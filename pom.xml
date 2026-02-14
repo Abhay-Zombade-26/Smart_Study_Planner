@@ -51,6 +51,36 @@
             <artifactId>flatlaf</artifactId>
             <version>3.2.5</version>
         </dependency>
+
+        <!-- Auth0 Java SDK -->
+        <dependency>
+            <groupId>com.auth0</groupId>
+            <artifactId>auth0</artifactId>
+            <version>1.45.0</version>
+        </dependency>
+
+        <!-- For Servlet support (required by Auth0) -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <version>4.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Auth0 MVC Commons for web apps -->
+        <dependency>
+            <groupId>com.auth0</groupId>
+            <artifactId>mvc-auth-commons</artifactId>
+            <version>1.10.0</version>
+        </dependency>
+
+        <!-- For better HTTP client -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
