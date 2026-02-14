@@ -1,0 +1,319 @@
+package ui;
+
+import model.User;
+import service.Auth0Service;
+import service.GoogleAuthService;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+
+public class LoginFrame extends JFrame {
+    
+    private JPanel mainPanel;
+    private JButton googleLoginBtn;
+    private JButton githubLoginBtn;
+    private HttpServer server;
+    private boolean serverStarted = false;
+    
+    public LoginFrame() {
+        initUI();
+        setupEventListeners();
+        // Start server when app launches
+        startOAuthServer();
+    }
+    
+    private void initUI() {
+        setTitle("Smart Study Planner - Login");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(900, 600);
+        setLocationRelativeTo(null);
+        setResizable(false);
+        
+        mainPanel = new JPanel(new GridBagLayout());
+        mainPanel.setBackground(new Color(245, 247, 250));
+        mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        
+        JPanel centerPanel = createCenterPanel();
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1;
+        gbc.weighty = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        
+        mainPanel.add(centerPanel, gbc);
+        add(mainPanel);
+    }
+    
+    private JPanel createCenterPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(230, 236, 240), 1, true),
+            new EmptyBorder(40, 60, 40, 60)
+        ));
+        panel.setPreferredSize(new Dimension(400, 450));
+        panel.setMaximumSize(new Dimension(400, 450));
+        
+        JLabel titleLabel = new JLabel("📚 Smart Study Planner");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titleLabel.setForeground(new Color(33, 33, 33));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel subtitleLabel = new JLabel("Goal-Based GitHub Integrated Planner");
+        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitleLabel.setForeground(new Color(100, 116, 139));
+        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        panel.add(Box.createVerticalStrut(20));
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(subtitleLabel);
+        panel.add(Box.createVerticalStrut(40));
+        
+        JLabel roleLabel = new JLabel("Select your role to continue");
+        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        roleLabel.setForeground(new Color(71, 85, 105));
+        roleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(roleLabel);
+        panel.add(Box.createVerticalStrut(20));
+        
+        googleLoginBtn = createOAuthButton("Continue with Google", new Color(66, 133, 244));
+        panel.add(googleLoginBtn);
+        panel.add(Box.createVerticalStrut(15));
+        
+        JLabel orLabel = new JLabel("or");
+        orLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        orLabel.setForeground(new Color(148, 163, 184));
+        orLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(orLabel);
+        panel.add(Box.createVerticalStrut(15));
+        
+        githubLoginBtn = createOAuthButton("Continue with GitHub", new Color(36, 41, 47));
+        panel.add(githubLoginBtn);
+        
+        panel.add(Box.createVerticalStrut(30));
+        
+        JLabel footerLabel = new JLabel("© 2024 Smart Study Planner");
+        footerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        footerLabel.setForeground(new Color(148, 163, 184));
+        footerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(footerLabel);
+        
+        return panel;
+    }
+    
+    private JButton createOAuthButton(String text, Color bgColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        button.setForeground(Color.WHITE);
+        button.setBackground(bgColor);
+        button.setBorderPainted(false);
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setPreferredSize(new Dimension(280, 45));
+        button.setMaximumSize(new Dimension(280, 45));
+        return button;
+    }
+    
+    private void setupEventListeners() {
+        googleLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                try {
+                    GoogleAuthService googleService = new GoogleAuthService();
+                    String url = googleService.getAuthorizationUrl();
+                    openBrowser(url);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this,
+                        "Failed to initialize Google login: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Authentication server is starting. Please wait a moment and try again.",
+                    "Server Starting",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        
+        githubLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                try {
+                    Auth0Service auth0Service = new Auth0Service();
+                    String url = auth0Service.getAuthorizationUrl();
+                    openBrowser(url);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this,
+                        "Failed to initialize GitHub login: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Authentication server is starting. Please wait a moment and try again.",
+                    "Server Starting",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+    }
+    
+    private void startOAuthServer() {
+        try {
+            // Try to free port 8888
+            try {
+                java.net.ServerSocket socket = new java.net.ServerSocket(8888);
+                socket.close();
+            } catch (Exception e) {
+                // Port might be in use, ignore
+            }
+            
+            server = HttpServer.create(new InetSocketAddress(8888), 0);
+            
+            server.createContext("/callback", new HttpHandler() {
+                @Override
+                public void handle(HttpExchange exchange) throws IOException {
+                    String query = exchange.getRequestURI().getQuery();
+                    String code = null;
+                    
+                    if (query != null && query.contains("code=")) {
+                        // Parse the code from query string
+                        String[] pairs = query.split("&");
+                        for (String pair : pairs) {
+                            String[] keyValue = pair.split("=");
+                            if (keyValue.length == 2 && keyValue[0].equals("code")) {
+                                code = URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8.name());
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Send response to browser
+                    String response = 
+                        "<html>" +
+                        "<body style='font-family: sans-serif; text-align: center; padding-top: 50px;'>" +
+                        "    <h2 style='color: #2ecc71;'>✅ Authentication Successful!</h2>" +
+                        "    <p>You can close this window and return to the application.</p>" +
+                        "    <script>setTimeout(function() { window.close(); }, 3000);</script>" +
+                        "</body>" +
+                        "</html>";
+                    
+                    exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+                    exchange.sendResponseHeaders(200, response.getBytes("UTF-8").length);
+                    
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(response.getBytes("UTF-8"));
+                    }
+                    
+                    // Process the code in the background
+                    if (code != null) {
+                        final String authCode = code;
+                        new Thread(() -> {
+                            try {
+                                Thread.sleep(1000); // Give browser time to load response
+                                SwingUtilities.invokeLater(() -> authenticateUser(authCode));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }).start();
+                    }
+                }
+            });
+            
+            server.setExecutor(null);
+            server.start();
+            serverStarted = true;
+            
+            System.out.println("✅ OAuth server started on port 8888");
+            System.out.println("📎 Callback URL: http://localhost:8888/callback");
+            
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Failed to start authentication server: " + e.getMessage(),
+                "Server Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void openBrowser(String url) {
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(new URI(url));
+            } else {
+                // Windows fallback
+                Runtime.getRuntime().exec("rundll32 url.dll,FileProtocolHandler " + url);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "<html>Failed to open browser automatically.<br>" +
+                "Please visit this URL manually:<br><br>" +
+                "<b>" + url + "</b></html>",
+                "Open URL Manually",
+                JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    
+    private void authenticateUser(String code) {
+        try {
+            System.out.println("🔑 Processing authentication code: " + code);
+            
+            Auth0Service auth0Service = new Auth0Service();
+            User user = auth0Service.authenticate(code);
+            
+            if (user != null) {
+                System.out.println("✅ Authentication successful for: " + user.getEmail());
+                
+                if (server != null) {
+                    server.stop(0);
+                    serverStarted = false;
+                }
+                
+                SwingUtilities.invokeLater(() -> {
+                    dispose();
+                    new RoleSelectionFrame(user).setVisible(true);
+                });
+            } else {
+                System.err.println("❌ Authentication failed - user is null");
+                SwingUtilities.invokeLater(() -> 
+                    JOptionPane.showMessageDialog(this,
+                        "Authentication failed. Please check your Auth0 configuration.",
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE)
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Authentication error: " + e.getMessage());
+            e.printStackTrace();
+            SwingUtilities.invokeLater(() -> 
+                JOptionPane.showMessageDialog(this,
+                    "Authentication error: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE)
+            );
+        }
+    }
+    
+    @Override
+    public void dispose() {
+        if (server != null) {
+            server.stop(0);
+            serverStarted = false;
+            System.out.println("🛑 OAuth server stopped");
+        }
+        super.dispose();
+    }
+}
