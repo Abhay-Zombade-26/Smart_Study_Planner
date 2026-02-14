@@ -1,0 +1,23 @@
+# Auth0 Configuration
+auth0.domain=dev-mhae7l42vod7pq10.us.auth0.com
+auth0.client.id=Y2u6V0tLNxkeMfdyyJhSMv1Dhl0KzXGk
+auth0.client.secret=yTTBKW4pxoKyHoPrrTT9758OTIr4a5iSVUyasWShqOIwtGYlioM1GHTrRE4eXA9u
+auth0.redirect.uri=http://localhost:8888/callback
+
+# GitHub OAuth Configuration (for Auth0 to use)
+github.client.id=Ov23lixD0hWxkdPzcNcz
+github.client.secret=aec4bbcd57209b716eeffd9a1bb3559e625c4b22
+
+# Google OAuth Configuration
+google.client.id=YOUR_GOOGLE_CLIENT_ID_HERE
+google.client.secret=YOUR_GOOGLE_CLIENT_SECRET_HERE
+
+# Database Configuration
+db.url=jdbc:mysql://localhost:3306/smart_study_planner?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+db.user=root
+db.password=Abhay123
+
+# Application Settings
+app.name=Smart Study Planner
+app.version=1.0.0
+app.debug=true
