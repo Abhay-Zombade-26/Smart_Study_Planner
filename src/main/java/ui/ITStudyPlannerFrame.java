@@ -38,15 +38,12 @@ public class ITStudyPlannerFrame extends JFrame {
         mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
         mainPanel.setBackground(new Color(245, 247, 250));
         
-        // Header Panel
         JPanel headerPanel = createHeaderPanel();
         mainPanel.add(headerPanel, BorderLayout.NORTH);
         
-        // Center Panel with repository list
         JPanel centerPanel = createCenterPanel();
         mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
         
-        // Bottom Panel with actions
         JPanel bottomPanel = createBottomPanel();
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
         
@@ -80,7 +77,6 @@ public class ITStudyPlannerFrame extends JFrame {
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(10, 10, 10, 10));
         
-        // Repository selection panel
         JPanel selectPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         selectPanel.setBackground(Color.WHITE);
         
@@ -94,12 +90,10 @@ public class ITStudyPlannerFrame extends JFrame {
         selectPanel.add(repoLabel);
         selectPanel.add(repoComboBox);
         
-        // Status label
         statusLabel = new JLabel(" ");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         statusLabel.setForeground(new Color(52, 152, 219));
         
-        // Repository details area
         repoDetailsArea = new JTextArea(15, 50);
         repoDetailsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
         repoDetailsArea.setEditable(false);
@@ -132,7 +126,17 @@ public class ITStudyPlannerFrame extends JFrame {
         generatePlanBtn.setBackground(new Color(46, 204, 113));
         generatePlanBtn.setForeground(Color.WHITE);
         generatePlanBtn.setFocusPainted(false);
-        generatePlanBtn.addActionListener(e -> generateStudyPlan());
+        generatePlanBtn.addActionListener(e -> openMultiRepoDialog());
+        
+        JButton dashboardBtn = new JButton("?? View Dashboard");
+        dashboardBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        dashboardBtn.setBackground(new Color(155, 89, 182));
+        dashboardBtn.setForeground(Color.WHITE);
+        dashboardBtn.setFocusPainted(false);
+        dashboardBtn.addActionListener(e -> {
+            StudyDashboardDialog dashboard = new StudyDashboardDialog(this, user);
+            dashboard.setVisible(true);
+        });
         
         JButton logoutBtn = new JButton("?? Logout");
         logoutBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -143,9 +147,23 @@ public class ITStudyPlannerFrame extends JFrame {
         
         panel.add(refreshBtn);
         panel.add(generatePlanBtn);
+        panel.add(dashboardBtn);
         panel.add(logoutBtn);
         
         return panel;
+    }
+    
+    private void openMultiRepoDialog() {
+        if (repositories == null || repositories.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "No repositories found. Please refresh and try again.",
+                "No Repositories",
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        MultiRepoSelectionDialog dialog = new MultiRepoSelectionDialog(this, user, repositories);
+        dialog.setVisible(true);
     }
     
     private void loadRepositories() {
@@ -205,23 +223,6 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
     
-    private void generateStudyPlan() {
-        String selectedRepo = (String) repoComboBox.getSelectedItem();
-        if (selectedRepo == null || selectedRepo.equals("No repositories")) {
-            JOptionPane.showMessageDialog(this,
-                "Please select a valid repository first.",
-                "No Repository",
-                JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        JOptionPane.showMessageDialog(this,
-            "Study plan will be generated for: " + selectedRepo + "\n\n" +
-            "This feature is coming soon!",
-            "Study Plan",
-            JOptionPane.INFORMATION_MESSAGE);
-    }
-    
     private void logout() {
         int confirm = JOptionPane.showConfirmDialog(this,
             "Are you sure you want to logout?",
@@ -234,3 +235,4 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
 }
+
