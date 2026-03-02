@@ -18,7 +18,6 @@ public class DailyTask {
     
     public DailyTask() {}
     
-    // Getters and Setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
     
@@ -63,13 +62,29 @@ public class DailyTask {
         return "MISSED".equals(status);
     }
     
+    public boolean isPending() {
+        return "PENDING".equals(status);
+    }
+    
     public String getStatusEmoji() {
-        switch(status) {
-            case "COMPLETED": return "?";
-            case "MISSED": return "?";
-            case "PENDING": return "?";
-            case "ADJUSTED": return "??";
-            default: return "?";
+        if (isCompleted()) return "?";
+        if (isMissed()) return "?";
+        if (isPending()) {
+            if (taskDate.isBefore(LocalDate.now())) return "??"; // Overdue
+            if (taskDate.equals(LocalDate.now())) return "?"; // Today
+            return "??"; // Future
         }
+        return "?";
+    }
+    
+    public String getStatusColor() {
+        if (isCompleted()) return "GREEN";
+        if (isMissed()) return "RED";
+        if (isPending()) {
+            if (taskDate.isBefore(LocalDate.now())) return "ORANGE";
+            if (taskDate.equals(LocalDate.now())) return "BLUE";
+            return "GRAY";
+        }
+        return "GRAY";
     }
 }
