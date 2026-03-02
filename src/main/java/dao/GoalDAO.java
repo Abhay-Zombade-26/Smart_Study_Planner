@@ -62,37 +62,32 @@ public class GoalDAO {
         return goals;
     }
     
-    public Goal findActiveGoal(int userId, String repositoryName) {
-        String sql = "SELECT * FROM goals WHERE user_id = ? AND repository_name = ? AND status = 'ACTIVE'";
-        
+    // ADD THIS DELETE METHOD
+    public boolean deleteByUserId(int userId) {
+        String sql = "DELETE FROM goals WHERE user_id = ?";
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, userId);
-            stmt.setString(2, repositoryName);
-            ResultSet rs = stmt.executeQuery();
-            
-            if (rs.next()) {
-                return mapResultSetToGoal(rs);
-            }
+            int deleted = stmt.executeUpdate();
+            System.out.println("? Deleted " + deleted + " goals for user " + userId);
+            return true;
         } catch (SQLException e) {
-            System.err.println("Error fetching active goal: " + e.getMessage());
+            System.err.println("Error deleting goals: " + e.getMessage());
+            return false;
         }
-        return null;
     }
     
-    public boolean updateProgress(int goalId, int currentCommits) {
-        String sql = "UPDATE goals SET current_commits = ? WHERE id = ?";
-        
+    // ADD THIS DELETE METHOD FOR SINGLE GOAL
+    public boolean deleteById(int goalId) {
+        String sql = "DELETE FROM goals WHERE id = ?";
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
-            stmt.setInt(1, currentCommits);
-            stmt.setInt(2, goalId);
-            
+            stmt.setInt(1, goalId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            System.err.println("Error updating goal progress: " + e.getMessage());
+            System.err.println("Error deleting goal: " + e.getMessage());
             return false;
         }
     }
