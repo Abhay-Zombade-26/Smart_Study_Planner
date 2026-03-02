@@ -13,144 +13,328 @@ public class ITStudyPlannerFrame extends JFrame {
     
     private User user;
     private JPanel mainPanel;
+    private JPanel sidebarPanel;
+    private JPanel contentPanel;
+    private CardLayout cardLayout;
     private JComboBox<String> repoComboBox;
     private JLabel statusLabel;
     private JTextArea repoDetailsArea;
     private GitHubOAuthService gitHubService;
     private List<Map<String, String>> repositories;
     
+    // Color scheme
+    private final Color SIDEBAR_BG = new Color(26, 32, 44);
+    private final Color SIDEBAR_HOVER = new Color(44, 55, 74);
+    private final Color PRIMARY_COLOR = new Color(79, 70, 229);
+    private final Color SUCCESS_COLOR = new Color(16, 185, 129);
+    private final Color DANGER_COLOR = new Color(239, 68, 68);
+    private final Color WARNING_COLOR = new Color(245, 158, 11);
+    private final Color BG_LIGHT = new Color(249, 250, 251);
+    private final Color BORDER_COLOR = new Color(229, 231, 235);
+    
     public ITStudyPlannerFrame(User user) {
         this.user = user;
         this.gitHubService = new GitHubOAuthService();
         this.repositories = new ArrayList<>();
         
-        setTitle("Smart Study Planner - IT Student: " + user.getGithubUsername());
+        setTitle("Smart Study Planner - " + user.getGithubUsername());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 700);
+        setSize(1300, 800);
         setLocationRelativeTo(null);
+        setMinimumSize(new Dimension(1200, 700));
         
         initUI();
         loadRepositories();
     }
     
     private void initUI() {
-        mainPanel = new JPanel(new BorderLayout(10, 10));
-        mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
-        mainPanel.setBackground(new Color(245, 247, 250));
+        mainPanel = new JPanel(new BorderLayout(0, 0));
+        mainPanel.setBackground(BG_LIGHT);
         
-        JPanel headerPanel = createHeaderPanel();
-        mainPanel.add(headerPanel, BorderLayout.NORTH);
+        // Create sidebar
+        createSidebar();
         
-        JPanel centerPanel = createCenterPanel();
-        mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
+        // Create content area with CardLayout
+        cardLayout = new CardLayout();
+        contentPanel = new JPanel(cardLayout);
+        contentPanel.setBackground(BG_LIGHT);
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         
-        JPanel bottomPanel = createBottomPanel();
-        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
+        // Add all screens
+        contentPanel.add(createGoalSetupPanel(), "GOAL_SETUP");
+        contentPanel.add(new DashboardFrame(user).getMainPanel(), "DASHBOARD");
+        contentPanel.add(createStudyPlanPanel(), "STUDY_PLAN");
+        contentPanel.add(new GitHubProgressFrame(user).getMainPanel(), "GITHUB_PROGRESS");
+        contentPanel.add(createGoalsPanel(), "GOALS");
+        contentPanel.add(new ProfileFrame(user).getMainPanel(), "PROFILE");
+        
+        mainPanel.add(sidebarPanel, BorderLayout.WEST);
+        mainPanel.add(contentPanel, BorderLayout.CENTER);
         
         add(mainPanel);
+        
+        // Show goal setup first
+        cardLayout.show(contentPanel, "GOAL_SETUP");
     }
     
-    private JPanel createHeaderPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+    private void createSidebar() {
+        sidebarPanel = new JPanel();
+        sidebarPanel.setLayout(new BoxLayout(sidebarPanel, BoxLayout.Y_AXIS));
+        sidebarPanel.setBackground(SIDEBAR_BG);
+        sidebarPanel.setPreferredSize(new Dimension(280, getHeight()));
+        sidebarPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, BORDER_COLOR));
         
-        JLabel welcomeLabel = new JLabel("Welcome, " + user.getName() + "!");
-        welcomeLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        // App logo with gradient effect
+        JPanel logoPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                int w = getWidth();
+                int h = getHeight();
+                GradientPaint gp = new GradientPaint(0, 0, PRIMARY_COLOR, w, 0, SUCCESS_COLOR);
+                g2d.setPaint(gp);
+                g2d.fillRect(0, 0, w, h);
+            }
+        };
+        logoPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 20));
+        logoPanel.setPreferredSize(new Dimension(280, 100));
+        logoPanel.setMaximumSize(new Dimension(280, 100));
         
-        JLabel githubLabel = new JLabel("GitHub: @" + user.getGithubUsername());
-        githubLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        githubLabel.setForeground(new Color(52, 152, 219));
+        JLabel logoLabel = new JLabel("?? Smart Planner");
+        logoLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        logoLabel.setForeground(Color.WHITE);
+        logoPanel.add(logoLabel);
         
-        JPanel textPanel = new JPanel(new GridLayout(2, 1));
-        textPanel.setBackground(Color.WHITE);
-        textPanel.add(welcomeLabel);
-        textPanel.add(githubLabel);
+        sidebarPanel.add(logoPanel);
+        sidebarPanel.add(Box.createVerticalStrut(20));
         
-        panel.add(textPanel, BorderLayout.WEST);
+        // User profile card
+        JPanel userCard = new JPanel();
+        userCard.setLayout(new BoxLayout(userCard, BoxLayout.Y_AXIS));
+        userCard.setBackground(new Color(44, 55, 74));
+        userCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(55, 65, 81), 1),
+            new EmptyBorder(20, 20, 20, 20)
+        ));
+        userCard.setMaximumSize(new Dimension(260, 120));
+        userCard.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        return panel;
+        JLabel avatarLabel = new JLabel("??");
+        avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 40));
+        avatarLabel.setForeground(Color.WHITE);
+        avatarLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel nameLabel = new JLabel(user.getName());
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        nameLabel.setForeground(Color.WHITE);
+        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel roleLabel = new JLabel("IT Student");
+        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        roleLabel.setForeground(new Color(156, 163, 175));
+        roleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        userCard.add(avatarLabel);
+        userCard.add(Box.createVerticalStrut(10));
+        userCard.add(nameLabel);
+        userCard.add(Box.createVerticalStrut(5));
+        userCard.add(roleLabel);
+        
+        sidebarPanel.add(userCard);
+        sidebarPanel.add(Box.createVerticalStrut(30));
+        
+        // Navigation buttons with icons
+        addNavButton("?? Goal Setup", "GOAL_SETUP", new Color(79, 70, 229));
+        addNavButton("?? Dashboard", "DASHBOARD", new Color(16, 185, 129));
+        addNavButton("?? My Study Plan", "STUDY_PLAN", new Color(245, 158, 11));
+        addNavButton("?? GitHub Progress", "GITHUB_PROGRESS", new Color(139, 92, 246));
+        addNavButton("?? Goals", "GOALS", new Color(236, 72, 153));
+        addNavButton("?? Profile", "PROFILE", new Color(59, 130, 246));
+        
+        sidebarPanel.add(Box.createVerticalGlue());
+        
+        // Logout button
+        JButton logoutBtn = new JButton("?? Logout");
+        logoutBtn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        logoutBtn.setForeground(Color.WHITE);
+        logoutBtn.setBackground(DANGER_COLOR);
+        logoutBtn.setBorderPainted(false);
+        logoutBtn.setFocusPainted(false);
+        logoutBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logoutBtn.setMaximumSize(new Dimension(240, 45));
+        logoutBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        logoutBtn.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        
+        logoutBtn.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to logout?",
+                "Logout Confirmation",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+            );
+            if (confirm == JOptionPane.YES_OPTION) {
+                new LoginFrame().setVisible(true);
+                dispose();
+            }
+        });
+        
+        sidebarPanel.add(logoutBtn);
+        sidebarPanel.add(Box.createVerticalStrut(20));
     }
     
-    private JPanel createCenterPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
+    private void addNavButton(String text, String cardName, Color accentColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        button.setForeground(new Color(209, 213, 219));
+        button.setBackground(SIDEBAR_BG);
+        button.setBorderPainted(false);
+        button.setFocusPainted(false);
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(240, 45));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setHorizontalAlignment(SwingConstants.LEFT);
+        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        
+        // Hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(44, 55, 74));
+                button.setForeground(Color.WHITE);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(SIDEBAR_BG);
+                button.setForeground(new Color(209, 213, 219));
+            }
+        });
+        
+        button.addActionListener(e -> {
+            cardLayout.show(contentPanel, cardName);
+            // Highlight active button
+            for (Component comp : sidebarPanel.getComponents()) {
+                if (comp instanceof JButton) {
+                    ((JButton) comp).setForeground(new Color(209, 213, 219));
+                }
+            }
+            button.setForeground(accentColor);
+        });
+        
+        sidebarPanel.add(button);
+        sidebarPanel.add(Box.createVerticalStrut(5));
+    }
+    
+    private JPanel createGoalSetupPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(Color.WHITE);
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(30, 30, 30, 30)
+        ));
         
-        JPanel selectPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        selectPanel.setBackground(Color.WHITE);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(10, 20, 10, 20);
         
-        JLabel repoLabel = new JLabel("Select Repository:");
-        repoLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        // Header with gradient line
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(Color.WHITE);
+        
+        JLabel headerLabel = new JLabel("Create Your Smart Study Plan");
+        headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        headerLabel.setForeground(new Color(17, 24, 39));
+        
+        JLabel subHeaderLabel = new JLabel("Select a GitHub repository to generate an AI-powered study plan");
+        subHeaderLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subHeaderLabel.setForeground(new Color(107, 114, 128));
+        
+        JSeparator separator = new JSeparator();
+        separator.setForeground(PRIMARY_COLOR);
+        separator.setPreferredSize(new Dimension(100, 3));
+        
+        headerPanel.add(headerLabel, BorderLayout.NORTH);
+        headerPanel.add(subHeaderLabel, BorderLayout.CENTER);
+        headerPanel.add(separator, BorderLayout.SOUTH);
+        
+        panel.add(headerPanel, gbc);
+        panel.add(Box.createVerticalStrut(20), gbc);
+        
+        // Repository selection card
+        JPanel repoCard = new JPanel(new GridBagLayout());
+        repoCard.setBackground(new Color(249, 250, 251));
+        repoCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(20, 20, 20, 20)
+        ));
+        
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = new Insets(5, 0, 5, 0);
+        
+        JLabel repoLabel = new JLabel("?? Select Repository");
+        repoLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        repoCard.add(repoLabel, c);
         
         repoComboBox = new JComboBox<>();
-        repoComboBox.setPreferredSize(new Dimension(400, 35));
-        repoComboBox.addActionListener(e -> showRepoDetails());
-        
-        selectPanel.add(repoLabel);
-        selectPanel.add(repoComboBox);
+        repoComboBox.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        repoComboBox.setPreferredSize(new Dimension(400, 45));
+        repoComboBox.setMaximumSize(new Dimension(400, 45));
+        repoComboBox.setBackground(Color.WHITE);
+        repoComboBox.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        repoComboBox.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        repoCard.add(repoComboBox, c);
         
         statusLabel = new JLabel(" ");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        statusLabel.setForeground(new Color(52, 152, 219));
+        statusLabel.setForeground(PRIMARY_COLOR);
+        repoCard.add(statusLabel, c);
         
-        repoDetailsArea = new JTextArea(15, 50);
-        repoDetailsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        repoDetailsArea.setEditable(false);
-        repoDetailsArea.setBackground(new Color(248, 249, 250));
-        repoDetailsArea.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
+        panel.add(repoCard, gbc);
+        panel.add(Box.createVerticalStrut(10), gbc);
         
-        JScrollPane scrollPane = new JScrollPane(repoDetailsArea);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Repository Details"));
+        // Action buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
+        buttonPanel.setBackground(Color.WHITE);
         
-        panel.add(selectPanel, BorderLayout.NORTH);
-        panel.add(scrollPane, BorderLayout.CENTER);
-        panel.add(statusLabel, BorderLayout.SOUTH);
+        JButton refreshBtn = createStyledButton("?? Refresh", new Color(107, 114, 128));
+        refreshBtn.addActionListener(e -> loadRepositories());
+        
+        JButton generateBtn = createStyledButton("?? Generate Plan", SUCCESS_COLOR);
+        generateBtn.addActionListener(e -> openMultiRepoDialog());
+        
+        buttonPanel.add(refreshBtn);
+        buttonPanel.add(generateBtn);
+        
+        panel.add(buttonPanel, gbc);
         
         return panel;
     }
     
-    private JPanel createBottomPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
-        panel.setBackground(Color.WHITE);
+    private JButton createStyledButton(String text, Color bgColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setForeground(Color.WHITE);
+        button.setBackground(bgColor);
+        button.setBorderPainted(false);
+        button.setFocusPainted(false);
+        button.setPreferredSize(new Dimension(180, 45));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         
-        JButton refreshBtn = new JButton("?? Refresh Repositories");
-        refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        refreshBtn.setBackground(new Color(52, 152, 219));
-        refreshBtn.setForeground(Color.WHITE);
-        refreshBtn.setFocusPainted(false);
-        refreshBtn.addActionListener(e -> loadRepositories());
-        
-        JButton generatePlanBtn = new JButton("?? Generate Study Plan");
-        generatePlanBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        generatePlanBtn.setBackground(new Color(46, 204, 113));
-        generatePlanBtn.setForeground(Color.WHITE);
-        generatePlanBtn.setFocusPainted(false);
-        generatePlanBtn.addActionListener(e -> openMultiRepoDialog());
-        
-        JButton dashboardBtn = new JButton("?? View Dashboard");
-        dashboardBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        dashboardBtn.setBackground(new Color(155, 89, 182));
-        dashboardBtn.setForeground(Color.WHITE);
-        dashboardBtn.setFocusPainted(false);
-        dashboardBtn.addActionListener(e -> {
-            StudyDashboardDialog dashboard = new StudyDashboardDialog(this, user);
-            dashboard.setVisible(true);
+        // Hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor.darker());
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor);
+            }
         });
         
-        JButton logoutBtn = new JButton("?? Logout");
-        logoutBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        logoutBtn.setBackground(new Color(231, 76, 60));
-        logoutBtn.setForeground(Color.WHITE);
-        logoutBtn.setFocusPainted(false);
-        logoutBtn.addActionListener(e -> logout());
-        
-        panel.add(refreshBtn);
-        panel.add(generatePlanBtn);
-        panel.add(dashboardBtn);
-        panel.add(logoutBtn);
-        
-        return panel;
+        return button;
     }
     
     private void openMultiRepoDialog() {
@@ -167,9 +351,8 @@ public class ITStudyPlannerFrame extends JFrame {
     }
     
     private void loadRepositories() {
-        statusLabel.setText("Loading your repositories...");
+        statusLabel.setText("? Loading your repositories...");
         repoComboBox.removeAllItems();
-        repoDetailsArea.setText("");
         
         SwingWorker<List<Map<String, String>>, Void> worker = new SwingWorker<>() {
             @Override
@@ -186,13 +369,15 @@ public class ITStudyPlannerFrame extends JFrame {
                 try {
                     repositories = get();
                     if (repositories == null || repositories.isEmpty()) {
-                        statusLabel.setText("No repositories found. Create some on GitHub first!");
+                        statusLabel.setText("? No repositories found. Create some on GitHub first!");
+                        statusLabel.setForeground(DANGER_COLOR);
                         repoComboBox.addItem("No repositories");
                     } else {
                         for (Map<String, String> repo : repositories) {
                             repoComboBox.addItem(repo.get("name"));
                         }
                         statusLabel.setText("? Loaded " + repositories.size() + " repositories");
+                        statusLabel.setForeground(SUCCESS_COLOR);
                         
                         if (repositories.size() > 0) {
                             repoComboBox.setSelectedIndex(0);
@@ -200,6 +385,7 @@ public class ITStudyPlannerFrame extends JFrame {
                     }
                 } catch (Exception e) {
                     statusLabel.setText("? Error loading repositories: " + e.getMessage());
+                    statusLabel.setForeground(DANGER_COLOR);
                     e.printStackTrace();
                 }
             }
@@ -207,20 +393,40 @@ public class ITStudyPlannerFrame extends JFrame {
         worker.execute();
     }
     
-    private void showRepoDetails() {
-        int selectedIndex = repoComboBox.getSelectedIndex();
-        if (selectedIndex >= 0 && selectedIndex < repositories.size()) {
-            Map<String, String> repo = repositories.get(selectedIndex);
-            
-            StringBuilder details = new StringBuilder();
-            details.append("?? Repository: ").append(repo.get("name")).append("\n");
-            details.append("?? URL: ").append(repo.get("html_url")).append("\n");
-            details.append("?? Description: ").append(repo.get("description")).append("\n");
-            details.append("?? Private: ").append(repo.get("private")).append("\n");
-            details.append("?? Last Updated: ").append(repo.get("updated_at")).append("\n");
-            
-            repoDetailsArea.setText(details.toString());
-        }
+    private JPanel createStudyPlanPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(30, 30, 30, 30)
+        ));
+        
+        JLabel placeholder = new JLabel("?? Your study plan will appear here");
+        placeholder.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+        placeholder.setForeground(new Color(156, 163, 175));
+        placeholder.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        panel.add(placeholder, BorderLayout.CENTER);
+        
+        return panel;
+    }
+    
+    private JPanel createGoalsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(30, 30, 30, 30)
+        ));
+        
+        JLabel placeholder = new JLabel("?? Your goals and milestones will appear here");
+        placeholder.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+        placeholder.setForeground(new Color(156, 163, 175));
+        placeholder.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        panel.add(placeholder, BorderLayout.CENTER);
+        
+        return panel;
     }
     
     private void logout() {
@@ -235,4 +441,3 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
 }
-
