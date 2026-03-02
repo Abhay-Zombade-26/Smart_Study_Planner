@@ -11,6 +11,7 @@ import java.util.List;
 public class StudyPlanDAO {
 
     public StudyPlan save(StudyPlan plan) {
+        // Make sure this table name matches your database
         String sql = "INSERT INTO goals (user_id, repository_name, deadline, difficulty, daily_hours, completion_percentage) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
 
