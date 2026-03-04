@@ -141,20 +141,20 @@ public class StudyDashboardDialog extends JDialog {
             
             String text = value.toString();
             
-            if (text.contains("?") || text.contains("COMPLETED")) {
+            if (text.contains("COMPLETED")) {
                 badge.setText("? Completed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(SUCCESS_COLOR);
-            } else if (text.contains("?") || text.contains("MISSED")) {
+            } else if (text.contains("MISSED")) {
                 badge.setText("? Missed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(DANGER_COLOR);
-            } else if (text.contains("?") || text.contains("PENDING")) {
-                badge.setText("? Pending");
-                badge.setForeground(Color.WHITE);
-                badge.setBackground(WARNING_COLOR);
-            } else if (text.contains("??")) {
-                badge.setText("?? Overdue");
+            } else if (text.contains("PENDING")) {
+                if (text.contains("??") || text.contains("Overdue")) {
+                    badge.setText("?? Overdue");
+                } else {
+                    badge.setText("? Pending");
+                }
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(WARNING_COLOR);
             } else {
@@ -244,7 +244,7 @@ public class StudyDashboardDialog extends JDialog {
             tableModel.addRow(new Object[]{
                 task.getTaskDate().format(formatter),
                 task.getRepositoryName(),
-                task.getStatusEmoji() + " " + task.getStatus(),
+                task.getStatus(), // Use just the status, not the emoji
                 task.getPlannedHours(),
                 task.getActualHours(),
                 task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -302,7 +302,7 @@ public class StudyDashboardDialog extends JDialog {
             tableModel.addRow(new Object[]{
                 task.getTaskDate().format(formatter),
                 task.getRepositoryName(),
-                task.getStatusEmoji() + " " + task.getStatus(),
+                task.getStatus(), // Use just the status, not the emoji
                 task.getPlannedHours(),
                 task.getActualHours(),
                 task.getActualCommits() + "/" + task.getPlannedCommits()
