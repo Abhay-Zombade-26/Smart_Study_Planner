@@ -87,4 +87,10 @@ public class DailyTask {
         }
         return "GRAY";
     }
+    
+    @Override
+    public String toString() {
+        return String.format("DailyTask{id=%d, repo=%s, date=%s, status=%s, commits=%d/%d}", 
+            id, repositoryName, taskDate, status, actualCommits, plannedCommits);
+    }
 }

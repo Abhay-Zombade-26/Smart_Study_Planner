@@ -248,17 +248,17 @@ public class DashboardFrame extends JPanel {
             
             String text = value.toString();
             
-            // Check based on the actual status string, not just emojis
-            if (text.contains("?") || text.contains("COMPLETED")) {
+            // Check based on the status string, not emojis
+            if (text.contains("COMPLETED")) {
                 badge.setText("? Completed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(SUCCESS_COLOR);
-            } else if (text.contains("?") || text.contains("MISSED")) {
+            } else if (text.contains("MISSED")) {
                 badge.setText("? Missed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(DANGER_COLOR);
-            } else if (text.contains("?") || text.contains("PENDING") || text.contains("??")) {
-                if (text.contains("??")) {
+            } else if (text.contains("PENDING")) {
+                if (text.contains("??") || text.contains("Overdue")) {
                     badge.setText("?? Overdue");
                 } else {
                     badge.setText("? Pending");
@@ -304,7 +304,7 @@ public class DashboardFrame extends JPanel {
                 tableModel.addRow(new Object[]{
                     task.getTaskDate().format(formatter),
                     task.getRepositoryName(),
-                    task.getStatusEmoji() + " " + task.getStatus(),
+                    task.getStatus(), // Use just the status, not the emoji - the renderer will add emojis
                     task.getPlannedHours() + "h",
                     task.getActualHours() + "h",
                     task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -367,7 +367,7 @@ public class DashboardFrame extends JPanel {
                 tableModel.addRow(new Object[]{
                     task.getTaskDate().format(formatter),
                     task.getRepositoryName(),
-                    task.getStatusEmoji() + " " + task.getStatus(),
+                    task.getStatus(), // Use just the status, not the emoji
                     task.getPlannedHours() + "h",
                     task.getActualHours() + "h",
                     task.getActualCommits() + "/" + task.getPlannedCommits()
