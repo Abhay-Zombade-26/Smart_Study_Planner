@@ -27,7 +27,6 @@ public class GitHubCommitChecker {
     
     public void checkAndUpdateAllTasks(User user) {
         List<DailyTask> tasks = taskDAO.findByUserId(user.getId());
-        String accessToken = user.getAccessToken();
         
         System.out.println("?? Checking GitHub commits for " + tasks.size() + " tasks...");
         
@@ -69,6 +68,7 @@ public class GitHubCommitChecker {
             if (!newStatus.equals(oldStatus)) {
                 task.setStatus(newStatus);
                 taskDAO.update(task);
+                System.out.println("   Status updated from " + oldStatus + " to " + newStatus);
             }
         }
         
@@ -129,6 +129,7 @@ public class GitHubCommitChecker {
             reader.close();
             
             JSONArray commits = new JSONArray(response.toString());
+            System.out.println("   Found " + commits.length() + " commits");
             return commits.length();
             
         } catch (Exception e) {
