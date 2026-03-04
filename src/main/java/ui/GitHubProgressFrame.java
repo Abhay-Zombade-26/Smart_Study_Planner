@@ -1,8 +1,11 @@
 package ui;
 
-import dao.GitHubActivityDAO;
-import model.GitHubActivity;
 import model.User;
+import model.Goal;
+import model.DailyTask;
+import dao.GoalDAO;
+import dao.StudyTaskDAO;
+import service.GitHubCommitChecker;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -13,11 +16,16 @@ import java.awt.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 public class GitHubProgressFrame extends JPanel {
 
     private User user;
-    private GitHubActivityDAO gitHubActivityDAO;
+    private GoalDAO goalDAO;
+    private StudyTaskDAO taskDAO;
+    private GitHubCommitChecker commitChecker;
     private JTable progressTable;
     private DefaultTableModel tableModel;
     private JLabel totalCommitsLabel;
@@ -36,7 +44,9 @@ public class GitHubProgressFrame extends JPanel {
 
     public GitHubProgressFrame(User user) {
         this.user = user;
-        this.gitHubActivityDAO = new GitHubActivityDAO();
+        this.goalDAO = new GoalDAO();
+        this.taskDAO = new StudyTaskDAO();
+        this.commitChecker = new GitHubCommitChecker();
 
         setLayout(new BorderLayout(0, 20));
         setBackground(BG_LIGHT);
@@ -72,7 +82,7 @@ public class GitHubProgressFrame extends JPanel {
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(new Color(17, 24, 39));
 
-        JLabel subtitleLabel = new JLabel("Track your commit activity and repository progress");
+        JLabel subtitleLabel = new JLabel("Track your study plan progress and commit activity");
         subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         subtitleLabel.setForeground(new Color(107, 114, 128));
 
@@ -215,68 +225,131 @@ public class GitHubProgressFrame extends JPanel {
     }
 
     private void loadProgressData() {
+        // First, check GitHub for latest commits
+        commitChecker.checkAndUpdateAllTasks(user);
+        
         tableModel.setRowCount(0);
 
-        List<GitHubActivity> activities = gitHubActivityDAO.findByUserId(user.getId());
+        // Get all goals for the user
+        List<Goal> goals = goalDAO.findByUserId(user.getId());
+        
+        // Get all tasks for the user
+        List<DailyTask> allTasks = taskDAO.findByUserId(user.getId());
+        
+        // Group tasks by repository
+        Map<String, List<DailyTask>> tasksByRepo = new HashMap<>();
+        for (DailyTask task : allTasks) {
+            tasksByRepo.computeIfAbsent(task.getRepositoryName(), k -> new ArrayList<>()).add(task);
+        }
 
         int totalCommits = 0;
         int activeRepos = 0;
         LocalDate latestCommit = null;
+        int currentStreak = 0;
 
-        if (activities.isEmpty()) {
-            addSampleData();
-        } else {
-            for (GitHubActivity activity : activities) {
-                int progress = calculateProgress(activity);
-                String lastCommit = activity.getLastCommitDate() != null ?
-                        formatDate(activity.getLastCommitDate()) : "Never";
-                String status = activity.getStatus();
-
-                tableModel.addRow(new Object[]{
-                        activity.getRepoName(),
-                        progress,
-                        lastCommit,
-                        status
-                });
-
-                totalCommits += activity.getCommitCount();
-                if (activity.getStatus().equals("Green")) activeRepos++;
-                if (activity.getLastCommitDate() != null) {
-                    if (latestCommit == null || activity.getLastCommitDate().isAfter(latestCommit)) {
-                        latestCommit = activity.getLastCommitDate();
+        // Add data for each goal/repository
+        for (Goal goal : goals) {
+            String repoName = goal.getRepositoryName();
+            List<DailyTask> repoTasks = tasksByRepo.getOrDefault(repoName, new ArrayList<>());
+            
+            // Calculate progress for this repository
+            int totalTasks = repoTasks.size();
+            int completedTasks = 0;
+            LocalDate lastCommitDate = null;
+            
+            for (DailyTask task : repoTasks) {
+                if (task.isCompleted()) {
+                    completedTasks++;
+                }
+                if (task.getActualCommits() > 0) {
+                    totalCommits += task.getActualCommits();
+                    if (lastCommitDate == null || task.getTaskDate().isAfter(lastCommitDate)) {
+                        lastCommitDate = task.getTaskDate();
                     }
                 }
             }
+            
+            // Calculate progress percentage
+            int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+            
+            // Determine status
+            String status = determineStatus(repoTasks);
+            if (status.equals("Green")) {
+                activeRepos++;
+            }
+            
+            // Track latest commit
+            if (lastCommitDate != null) {
+                if (latestCommit == null || lastCommitDate.isAfter(latestCommit)) {
+                    latestCommit = lastCommitDate;
+                }
+            }
+            
+            // Add row to table
+            tableModel.addRow(new Object[]{
+                repoName,
+                progress,
+                lastCommitDate != null ? formatDate(lastCommitDate) : "Never",
+                status
+            });
         }
-
+        
+        // Calculate streak from tasks
+        currentStreak = calculateStreak(allTasks);
+        
         // Update stats
         totalCommitsLabel.setText(String.valueOf(totalCommits));
         activeReposLabel.setText(String.valueOf(activeRepos));
+        streakLabel.setText("?? " + currentStreak + " days");
         
         if (latestCommit != null) {
             long daysAgo = java.time.temporal.ChronoUnit.DAYS.between(latestCommit, LocalDate.now());
             if (daysAgo == 0) {
                 lastCommitLabel.setText("Today");
-                streakLabel.setText("?? " + calculateStreak(activities) + " days");
             } else if (daysAgo == 1) {
                 lastCommitLabel.setText("Yesterday");
             } else {
                 lastCommitLabel.setText(daysAgo + " days ago");
             }
+        } else {
+            lastCommitLabel.setText("Never");
         }
     }
+    
+    private String determineStatus(List<DailyTask> tasks) {
+        if (tasks.isEmpty()) return "No activity";
+        
+        LocalDate today = LocalDate.now();
+        boolean hasRecent = false;
+        boolean hasDelayed = false;
+        
+        for (DailyTask task : tasks) {
+            if (task.isCompleted() && task.getTaskDate().equals(today)) {
+                return "Green"; // Active - committed today
+            }
+            if (task.isCompleted() && task.getTaskDate().equals(today.minusDays(1))) {
+                hasRecent = true;
+            }
+            if (task.isMissed() && task.getTaskDate().isAfter(today.minusDays(3))) {
+                hasDelayed = true;
+            }
+        }
+        
+        if (hasRecent) return "Yellow"; // Delayed - last commit yesterday
+        if (hasDelayed) return "Red"; // Missed - missed recent tasks
+        return "No activity";
+    }
 
-    private int calculateStreak(List<GitHubActivity> activities) {
+    private int calculateStreak(List<DailyTask> tasks) {
         int streak = 0;
         LocalDate today = LocalDate.now();
         
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 30; i++) { // Check last 30 days
             LocalDate checkDate = today.minusDays(i);
             boolean committed = false;
             
-            for (GitHubActivity activity : activities) {
-                if (activity.getLastCommitDate() != null && 
-                    activity.getLastCommitDate().equals(checkDate)) {
+            for (DailyTask task : tasks) {
+                if (task.isCompleted() && task.getTaskDate().equals(checkDate)) {
                     committed = true;
                     break;
                 }
@@ -285,28 +358,11 @@ public class GitHubProgressFrame extends JPanel {
             if (committed) {
                 streak++;
             } else {
-                break;
+                break; // Streak broken
             }
         }
         
         return streak;
-    }
-
-    private void addSampleData() {
-        tableModel.addRow(new Object[]{"user/project-alpha", 75, "Today", "Green"});
-        tableModel.addRow(new Object[]{"user/project-beta", 45, "Yesterday", "Yellow"});
-        tableModel.addRow(new Object[]{"user/project-gamma", 20, "3 days ago", "Red"});
-        tableModel.addRow(new Object[]{"user/project-delta", 90, "Today", "Green"});
-        
-        totalCommitsLabel.setText("230");
-        activeReposLabel.setText("2");
-        lastCommitLabel.setText("Today");
-        streakLabel.setText("?? 3 days");
-    }
-
-    private int calculateProgress(GitHubActivity activity) {
-        if (activity.getCommitCount() == 0) return 0;
-        return Math.min(100, activity.getCommitCount());
     }
 
     private String formatDate(LocalDate date) {
@@ -433,7 +489,7 @@ public class GitHubProgressFrame extends JPanel {
                     badge.setBackground(DANGER_COLOR);
                     break;
                 default:
-                    badge.setText("? Unknown");
+                    badge.setText("? No activity");
                     badge.setForeground(Color.WHITE);
                     badge.setBackground(new Color(156, 163, 175));
             }
