@@ -9,22 +9,26 @@ import java.util.List;
 public class GoalDAO {
     
     public boolean save(Goal goal) {
-        String sql = "INSERT INTO goals (user_id, repository_name, duration_months, " +
-                    "daily_hours, start_date, end_date, target_commits, current_commits, status) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO goals (user_id, repository_name, priority, target_features, " +
+                    "duration_months, daily_hours, experience_level, start_date, end_date, " +
+                    "target_commits, current_commits, status) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             
             stmt.setInt(1, goal.getUserId());
             stmt.setString(2, goal.getRepositoryName());
-            stmt.setInt(3, goal.getDurationMonths());
-            stmt.setInt(4, goal.getDailyHours());
-            stmt.setDate(5, Date.valueOf(goal.getStartDate()));
-            stmt.setDate(6, Date.valueOf(goal.getEndDate()));
-            stmt.setInt(7, goal.getTargetCommits());
-            stmt.setInt(8, goal.getCurrentCommits());
-            stmt.setString(9, goal.getStatus());
+            stmt.setString(3, goal.getPriority());
+            stmt.setString(4, goal.getTargetFeatures());
+            stmt.setInt(5, goal.getDurationMonths());
+            stmt.setInt(6, goal.getDailyHours());
+            stmt.setString(7, goal.getExperienceLevel());
+            stmt.setDate(8, Date.valueOf(goal.getStartDate()));
+            stmt.setDate(9, Date.valueOf(goal.getEndDate()));
+            stmt.setInt(10, goal.getTargetCommits());
+            stmt.setInt(11, goal.getCurrentCommits());
+            stmt.setString(12, goal.getStatus());
             
             int affectedRows = stmt.executeUpdate();
             
@@ -62,7 +66,6 @@ public class GoalDAO {
         return goals;
     }
     
-    // ADD THIS DELETE METHOD
     public boolean deleteByUserId(int userId) {
         String sql = "DELETE FROM goals WHERE user_id = ?";
         try (Connection conn = DBConnection.getInstance().getConnection();
@@ -78,7 +81,6 @@ public class GoalDAO {
         }
     }
     
-    // ADD THIS DELETE METHOD FOR SINGLE GOAL
     public boolean deleteById(int goalId) {
         String sql = "DELETE FROM goals WHERE id = ?";
         try (Connection conn = DBConnection.getInstance().getConnection();
@@ -97,6 +99,12 @@ public class GoalDAO {
         goal.setId(rs.getInt("id"));
         goal.setUserId(rs.getInt("user_id"));
         goal.setRepositoryName(rs.getString("repository_name"));
+        
+        // Handle new fields (they might be null for old records)
+        try { goal.setPriority(rs.getString("priority")); } catch (SQLException e) { goal.setPriority("MEDIUM"); }
+        try { goal.setTargetFeatures(rs.getString("target_features")); } catch (SQLException e) { goal.setTargetFeatures(""); }
+        try { goal.setExperienceLevel(rs.getString("experience_level")); } catch (SQLException e) { goal.setExperienceLevel("INTERMEDIATE"); }
+        
         goal.setDurationMonths(rs.getInt("duration_months"));
         goal.setDailyHours(rs.getInt("daily_hours"));
         goal.setStartDate(rs.getDate("start_date").toLocalDate());
