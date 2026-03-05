@@ -1,0 +1,99 @@
+# Compiled files
+target/
+*.class
+
+# Configuration files with secrets - MOST IMPORTANT!
+src/main/resources/config.properties
+src/main/resources/config.properties.template
+*.properties
+application.properties
+application.yml
+application.yaml
+
+# Maven specific
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+*.prefs
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+.atom/
+
+# NetBeans
+nb-configuration.xml
+nbactions.xml
+nb-distribution.xml
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+.settings/
+*.code-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+logs/
+log/
+
+# Database files
+*.db
+*.sqlite
+*.h2.db
+
+# Test reports
+test-reports/
+surefire-reports/
+target/surefire-reports/
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# Backup files
+*.bak
+*.orig
+*.tmp
+
+# Secret files - BE EXTRA CAREFUL HERE!
+**/secrets/
+**/credentials/
+**/keys/
+*.p12
+*.pem
+*.key
+*.keystore
