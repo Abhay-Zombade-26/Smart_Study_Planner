@@ -71,7 +71,7 @@ public class StudyDashboardDialog extends JDialog {
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(0, 0, 20, 0));
         
-        JLabel titleLabel = new JLabel("?? Your Study Dashboard");
+        JLabel titleLabel = new JLabel("Your Study Dashboard");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         
         todayTaskLabel = new JLabel("Loading today's tasks...");
@@ -129,8 +129,6 @@ public class StudyDashboardDialog extends JDialog {
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
             
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            
             JPanel panel = new JPanel(new GridBagLayout());
             panel.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
             
@@ -142,23 +140,19 @@ public class StudyDashboardDialog extends JDialog {
             String text = value.toString();
             
             if (text.contains("COMPLETED")) {
-                badge.setText("? Completed");
+                badge.setText("Completed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(SUCCESS_COLOR);
             } else if (text.contains("MISSED")) {
-                badge.setText("? Missed");
+                badge.setText("Missed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(DANGER_COLOR);
             } else if (text.contains("PENDING")) {
-                if (text.contains("??") || text.contains("Overdue")) {
-                    badge.setText("?? Overdue");
-                } else {
-                    badge.setText("? Pending");
-                }
+                badge.setText("Pending");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(WARNING_COLOR);
             } else {
-                badge.setText("?? " + value.toString());
+                badge.setText(text);
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(new Color(107, 114, 128));
             }
@@ -185,7 +179,7 @@ public class StudyDashboardDialog extends JDialog {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttonPanel.setBackground(Color.WHITE);
         
-        JButton refreshBtn = new JButton("?? Refresh");
+        JButton refreshBtn = new JButton("Refresh");
         refreshBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         refreshBtn.setBackground(Color.WHITE);
         refreshBtn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
@@ -194,7 +188,7 @@ public class StudyDashboardDialog extends JDialog {
         refreshBtn.addActionListener(e -> loadTasks());
         
         // DELETE PLAN BUTTON
-        JButton deletePlanBtn = new JButton("??? Delete Plan");
+        JButton deletePlanBtn = new JButton("Delete Plan");
         deletePlanBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
         deletePlanBtn.setBackground(DANGER_COLOR);
         deletePlanBtn.setForeground(Color.WHITE);
@@ -222,10 +216,8 @@ public class StudyDashboardDialog extends JDialog {
     }
     
     private void loadTasks() {
-        // First check GitHub for actual commits
         checkGitHubCommits();
         
-        // Then load and display tasks
         List<DailyTask> tasks = taskDAO.findByUserId(user.getId());
         tableModel.setRowCount(0);
         
@@ -234,7 +226,6 @@ public class StudyDashboardDialog extends JDialog {
         int completed = 0;
         int total = tasks.size();
         
-        // Sort tasks by date (most recent first)
         tasks.sort((t1, t2) -> t2.getTaskDate().compareTo(t1.getTaskDate()));
         
         StringBuilder todayTasks = new StringBuilder("Today: ");
@@ -244,7 +235,7 @@ public class StudyDashboardDialog extends JDialog {
             tableModel.addRow(new Object[]{
                 task.getTaskDate().format(formatter),
                 task.getRepositoryName(),
-                task.getStatus(), // Use just the status, not the emoji
+                task.getStatus(),
                 task.getPlannedHours(),
                 task.getActualHours(),
                 task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -295,14 +286,13 @@ public class StudyDashboardDialog extends JDialog {
         int completed = 0;
         int total = tasks.size();
         
-        // Sort tasks by date (most recent first)
         tasks.sort((t1, t2) -> t2.getTaskDate().compareTo(t1.getTaskDate()));
         
         for (DailyTask task : tasks) {
             tableModel.addRow(new Object[]{
                 task.getTaskDate().format(formatter),
                 task.getRepositoryName(),
-                task.getStatus(), // Use just the status, not the emoji
+                task.getStatus(),
                 task.getPlannedHours(),
                 task.getActualHours(),
                 task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -340,7 +330,7 @@ public class StudyDashboardDialog extends JDialog {
                 @Override
                 protected void done() {
                     JOptionPane.showMessageDialog(StudyDashboardDialog.this,
-                        "? All plans deleted successfully!",
+                        "All plans deleted successfully!",
                         "Plan Deleted",
                         JOptionPane.INFORMATION_MESSAGE);
                     loadTasks();

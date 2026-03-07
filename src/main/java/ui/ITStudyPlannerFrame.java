@@ -102,7 +102,7 @@ public class ITStudyPlannerFrame extends JFrame {
         logoPanel.setPreferredSize(new Dimension(280, 100));
         logoPanel.setMaximumSize(new Dimension(280, 100));
         
-        JLabel logoLabel = new JLabel("?? Smart Planner");
+        JLabel logoLabel = new JLabel("Smart Planner");
         logoLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
         logoLabel.setForeground(Color.WHITE);
         logoPanel.add(logoLabel);
@@ -121,11 +121,7 @@ public class ITStudyPlannerFrame extends JFrame {
         userCard.setMaximumSize(new Dimension(260, 120));
         userCard.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        JLabel avatarLabel = new JLabel("??");
-        avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 40));
-        avatarLabel.setForeground(Color.WHITE);
-        avatarLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
+        // Removed avatar icon, just showing name and role
         JLabel nameLabel = new JLabel(user.getName());
         nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         nameLabel.setForeground(Color.WHITE);
@@ -136,8 +132,6 @@ public class ITStudyPlannerFrame extends JFrame {
         roleLabel.setForeground(new Color(156, 163, 175));
         roleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        userCard.add(avatarLabel);
-        userCard.add(Box.createVerticalStrut(10));
         userCard.add(nameLabel);
         userCard.add(Box.createVerticalStrut(5));
         userCard.add(roleLabel);
@@ -145,18 +139,18 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.add(userCard);
         sidebarPanel.add(Box.createVerticalStrut(30));
         
-        // Navigation buttons with icons
-        addNavButton("?? Goal Setup", "GOAL_SETUP", new Color(79, 70, 229));
-        addNavButton("?? Dashboard", "DASHBOARD", new Color(16, 185, 129));
-        addNavButton("?? My Study Plan", "STUDY_PLAN", new Color(245, 158, 11));
-        addNavButton("?? GitHub Progress", "GITHUB_PROGRESS", new Color(139, 92, 246));
-        addNavButton("?? Goals", "GOALS", new Color(236, 72, 153));
-        addNavButton("?? Profile", "PROFILE", new Color(59, 130, 246));
+        // Navigation buttons - icons removed
+        addNavButton("Goal Setup", "GOAL_SETUP", PRIMARY_COLOR);
+        addNavButton("Dashboard", "DASHBOARD", SUCCESS_COLOR);
+        addNavButton("My Study Plan", "STUDY_PLAN", WARNING_COLOR);
+        addNavButton("GitHub Progress", "GITHUB_PROGRESS", new Color(139, 92, 246));
+        addNavButton("Goals", "GOALS", new Color(236, 72, 153));
+        addNavButton("Profile", "PROFILE", new Color(59, 130, 246));
         
         sidebarPanel.add(Box.createVerticalGlue());
         
-        // Logout button
-        JButton logoutBtn = new JButton("?? Logout");
+        // Logout button - icon removed
+        JButton logoutBtn = new JButton("Logout");
         logoutBtn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         logoutBtn.setForeground(Color.WHITE);
         logoutBtn.setBackground(DANGER_COLOR);
@@ -201,7 +195,7 @@ public class ITStudyPlannerFrame extends JFrame {
         // Hover effect
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setBackground(new Color(44, 55, 74));
+                button.setBackground(SIDEBAR_HOVER);
                 button.setForeground(Color.WHITE);
             }
             public void mouseExited(java.awt.event.MouseEvent evt) {
@@ -274,7 +268,7 @@ public class ITStudyPlannerFrame extends JFrame {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.insets = new Insets(5, 0, 5, 0);
         
-        JLabel repoLabel = new JLabel("?? Select Repository");
+        JLabel repoLabel = new JLabel("Select Repository");
         repoLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         repoCard.add(repoLabel, c);
         
@@ -299,10 +293,10 @@ public class ITStudyPlannerFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
         buttonPanel.setBackground(Color.WHITE);
         
-        JButton refreshBtn = createStyledButton("?? Refresh", new Color(107, 114, 128));
+        JButton refreshBtn = createStyledButton("Refresh", new Color(107, 114, 128));
         refreshBtn.addActionListener(e -> loadRepositories());
         
-        JButton generateBtn = createStyledButton("?? Generate Plan", SUCCESS_COLOR);
+        JButton generateBtn = createStyledButton("Generate Plan", SUCCESS_COLOR);
         generateBtn.addActionListener(e -> openMultiRepoDialog());
         
         buttonPanel.add(refreshBtn);
@@ -320,7 +314,7 @@ public class ITStudyPlannerFrame extends JFrame {
         button.setBackground(bgColor);
         button.setBorderPainted(false);
         button.setFocusPainted(false);
-        button.setPreferredSize(new Dimension(180, 45));
+        button.setPreferredSize(new Dimension(150, 45));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         
@@ -351,7 +345,7 @@ public class ITStudyPlannerFrame extends JFrame {
     }
     
     private void loadRepositories() {
-        statusLabel.setText("? Loading your repositories...");
+        statusLabel.setText("Loading your repositories...");
         repoComboBox.removeAllItems();
         
         SwingWorker<List<Map<String, String>>, Void> worker = new SwingWorker<>() {
@@ -369,14 +363,14 @@ public class ITStudyPlannerFrame extends JFrame {
                 try {
                     repositories = get();
                     if (repositories == null || repositories.isEmpty()) {
-                        statusLabel.setText("? No repositories found. Create some on GitHub first!");
+                        statusLabel.setText("No repositories found. Create some on GitHub first!");
                         statusLabel.setForeground(DANGER_COLOR);
                         repoComboBox.addItem("No repositories");
                     } else {
                         for (Map<String, String> repo : repositories) {
                             repoComboBox.addItem(repo.get("name"));
                         }
-                        statusLabel.setText("? Loaded " + repositories.size() + " repositories");
+                        statusLabel.setText("Loaded " + repositories.size() + " repositories");
                         statusLabel.setForeground(SUCCESS_COLOR);
                         
                         if (repositories.size() > 0) {
@@ -384,7 +378,7 @@ public class ITStudyPlannerFrame extends JFrame {
                         }
                     }
                 } catch (Exception e) {
-                    statusLabel.setText("? Error loading repositories: " + e.getMessage());
+                    statusLabel.setText("Error loading repositories: " + e.getMessage());
                     statusLabel.setForeground(DANGER_COLOR);
                     e.printStackTrace();
                 }
@@ -401,7 +395,7 @@ public class ITStudyPlannerFrame extends JFrame {
             new EmptyBorder(30, 30, 30, 30)
         ));
         
-        JLabel placeholder = new JLabel("?? Your study plan will appear here");
+        JLabel placeholder = new JLabel("Your study plan will appear here");
         placeholder.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         placeholder.setForeground(new Color(156, 163, 175));
         placeholder.setHorizontalAlignment(SwingConstants.CENTER);
@@ -419,7 +413,7 @@ public class ITStudyPlannerFrame extends JFrame {
             new EmptyBorder(30, 30, 30, 30)
         ));
         
-        JLabel placeholder = new JLabel("?? Your goals and milestones will appear here");
+        JLabel placeholder = new JLabel("Your goals and milestones will appear here");
         placeholder.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         placeholder.setForeground(new Color(156, 163, 175));
         placeholder.setHorizontalAlignment(SwingConstants.CENTER);
