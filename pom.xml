@@ -49,7 +49,14 @@
         <dependency>
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
-            <version>3.2.5</version>
+            <version>3.4</version>
+        </dependency>
+        
+        <!-- FlatLaf Extras - For SVG icons -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>3.4</version>
         </dependency>
 
         <!-- Auth0 Java SDK -->
@@ -79,6 +86,13 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
+        </dependency>
+
+        <!-- SVG Salamander for SVG rendering -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>svgSalamander</artifactId>
+            <version>1.1.4</version>
         </dependency>
 
     </dependencies>

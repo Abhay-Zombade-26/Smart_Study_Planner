@@ -95,19 +95,19 @@ public class DashboardFrame extends JPanel {
         panel.setBorder(new EmptyBorder(20, 0, 20, 0));
         
         // Today's tasks card
-        JPanel todayCard = createStatCard("?? Today's Tasks", "0", new Color(59, 130, 246));
+        JPanel todayCard = createStatCard("Today's Tasks", "0", new Color(59, 130, 246));
         todayTasksLabel = (JLabel) ((JPanel) todayCard.getComponent(1)).getComponent(0);
         
         // Completed tasks card
-        JPanel completedCard = createStatCard("? Completed", "0", SUCCESS_COLOR);
+        JPanel completedCard = createStatCard("Completed", "0", SUCCESS_COLOR);
         completedLabel = (JLabel) ((JPanel) completedCard.getComponent(1)).getComponent(0);
         
         // Progress card
-        JPanel progressCard = createStatCard("?? Progress", "0%", WARNING_COLOR);
+        JPanel progressCard = createStatCard("Progress", "0%", WARNING_COLOR);
         progressLabel = (JLabel) ((JPanel) progressCard.getComponent(1)).getComponent(0);
         
         // Streak card
-        JPanel streakCard = createStatCard("?? Streak", "0 days", PRIMARY_COLOR);
+        JPanel streakCard = createStatCard("Streak", "0 days", PRIMARY_COLOR);
         streakLabel = (JLabel) ((JPanel) streakCard.getComponent(1)).getComponent(0);
         
         panel.add(todayCard);
@@ -203,7 +203,7 @@ public class DashboardFrame extends JPanel {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttonPanel.setBackground(CARD_BG);
         
-        JButton refreshBtn = new JButton("?? Refresh");
+        JButton refreshBtn = new JButton("Refresh");
         refreshBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         refreshBtn.setBackground(CARD_BG);
         refreshBtn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
@@ -211,7 +211,7 @@ public class DashboardFrame extends JPanel {
         refreshBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         refreshBtn.addActionListener(e -> loadTasks());
         
-        JButton deletePlanBtn = new JButton("??? Delete Plan");
+        JButton deletePlanBtn = new JButton("Delete Plan");
         deletePlanBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
         deletePlanBtn.setBackground(DANGER_COLOR);
         deletePlanBtn.setForeground(Color.WHITE);
@@ -248,25 +248,20 @@ public class DashboardFrame extends JPanel {
             
             String text = value.toString();
             
-            // Check based on the status string, not emojis
             if (text.contains("COMPLETED")) {
-                badge.setText("? Completed");
+                badge.setText("Completed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(SUCCESS_COLOR);
             } else if (text.contains("MISSED")) {
-                badge.setText("? Missed");
+                badge.setText("Missed");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(DANGER_COLOR);
             } else if (text.contains("PENDING")) {
-                if (text.contains("??") || text.contains("Overdue")) {
-                    badge.setText("?? Overdue");
-                } else {
-                    badge.setText("? Pending");
-                }
+                badge.setText("Pending");
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(WARNING_COLOR);
             } else {
-                badge.setText("?? " + value.toString());
+                badge.setText(text);
                 badge.setForeground(Color.WHITE);
                 badge.setBackground(new Color(107, 114, 128));
             }
@@ -282,7 +277,6 @@ public class DashboardFrame extends JPanel {
     }
     
     private void loadTasks() {
-        // Check GitHub commits first
         checkGitHubCommits();
         
         List<DailyTask> tasks = studyTaskDAO.findByUserId(user.getId());
@@ -295,16 +289,14 @@ public class DashboardFrame extends JPanel {
         int streak = 0;
         int todayCount = 0;
         
-        // Sort tasks by date (most recent first for display)
         tasks.sort((t1, t2) -> t2.getTaskDate().compareTo(t1.getTaskDate()));
         
         for (DailyTask task : tasks) {
-            // Only show recent tasks (last 30 days)
             if (task.getTaskDate().isAfter(today.minusDays(30))) {
                 tableModel.addRow(new Object[]{
                     task.getTaskDate().format(formatter),
                     task.getRepositoryName(),
-                    task.getStatus(), // Use just the status, not the emoji - the renderer will add emojis
+                    task.getStatus(),
                     task.getPlannedHours() + "h",
                     task.getActualHours() + "h",
                     task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -323,7 +315,6 @@ public class DashboardFrame extends JPanel {
             }
         }
         
-        // Update stat cards
         todayTasksLabel.setText(String.valueOf(todayCount));
         completedLabel.setText(String.valueOf(completed));
         streakLabel.setText(streak + " days");
@@ -359,7 +350,6 @@ public class DashboardFrame extends JPanel {
         int total = tasks.size();
         int todayCount = 0;
         
-        // Sort tasks by date (most recent first for display)
         tasks.sort((t1, t2) -> t2.getTaskDate().compareTo(t1.getTaskDate()));
         
         for (DailyTask task : tasks) {
@@ -367,7 +357,7 @@ public class DashboardFrame extends JPanel {
                 tableModel.addRow(new Object[]{
                     task.getTaskDate().format(formatter),
                     task.getRepositoryName(),
-                    task.getStatus(), // Use just the status, not the emoji
+                    task.getStatus(),
                     task.getPlannedHours() + "h",
                     task.getActualHours() + "h",
                     task.getActualCommits() + "/" + task.getPlannedCommits()
@@ -386,7 +376,6 @@ public class DashboardFrame extends JPanel {
     }
     
     private void deletePlan() {
-        // Ask for confirmation
         int confirm = JOptionPane.showConfirmDialog(this,
             "Are you sure you want to delete ALL your study plans?\n\n" +
             "This will permanently remove:\n" +
@@ -399,27 +388,20 @@ public class DashboardFrame extends JPanel {
             JOptionPane.WARNING_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
-            // Delete in background
             SwingWorker<Void, Void> worker = new SwingWorker<>() {
                 @Override
                 protected Void doInBackground() {
-                    // Delete all tasks for user
                     studyTaskDAO.deleteByUserId(user.getId());
-                    
-                    // Delete all goals for user
                     goalDAO.deleteByUserId(user.getId());
-                    
                     return null;
                 }
                 
                 @Override
                 protected void done() {
                     JOptionPane.showMessageDialog(DashboardFrame.this,
-                        "? All plans deleted successfully!",
+                        "All plans deleted successfully!",
                         "Plan Deleted",
                         JOptionPane.INFORMATION_MESSAGE);
-                    
-                    // Refresh the display
                     loadTasks();
                 }
             };
