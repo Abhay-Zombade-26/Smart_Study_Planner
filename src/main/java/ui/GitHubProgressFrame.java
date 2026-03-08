@@ -78,7 +78,7 @@ public class GitHubProgressFrame extends JPanel {
             new EmptyBorder(20, 25, 20, 25)
         ));
 
-        JLabel titleLabel = new JLabel("?? GitHub Progress Tracker");
+        JLabel titleLabel = new JLabel("GitHub Progress Tracker");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(new Color(17, 24, 39));
 
@@ -102,19 +102,19 @@ public class GitHubProgressFrame extends JPanel {
         panel.setBorder(new EmptyBorder(20, 0, 20, 0));
         
         // Total Commits card
-        JPanel commitsCard = createStatCard("?? Total Commits", "0", PRIMARY_COLOR);
+        JPanel commitsCard = createStatCard("Total Commits", "0", PRIMARY_COLOR);
         totalCommitsLabel = (JLabel) ((JPanel) commitsCard.getComponent(1)).getComponent(0);
         
         // Active Repos card
-        JPanel reposCard = createStatCard("?? Active Repos", "0", SUCCESS_COLOR);
+        JPanel reposCard = createStatCard("Active Repos", "0", SUCCESS_COLOR);
         activeReposLabel = (JLabel) ((JPanel) reposCard.getComponent(1)).getComponent(0);
         
         // Streak card
-        JPanel streakCard = createStatCard("?? Current Streak", "0 days", WARNING_COLOR);
+        JPanel streakCard = createStatCard("Current Streak", "0 days", WARNING_COLOR);
         streakLabel = (JLabel) ((JPanel) streakCard.getComponent(1)).getComponent(0);
         
         // Last Commit card
-        JPanel lastCommitCard = createStatCard("?? Last Commit", "Never", new Color(139, 92, 246));
+        JPanel lastCommitCard = createStatCard("Last Commit", "Never", new Color(139, 92, 246));
         lastCommitLabel = (JLabel) ((JPanel) lastCommitCard.getComponent(1)).getComponent(0);
         
         panel.add(commitsCard);
@@ -208,7 +208,7 @@ public class GitHubProgressFrame extends JPanel {
         topPanel.setBackground(CARD_BG);
         topPanel.add(titleLabel, BorderLayout.WEST);
 
-        JButton refreshBtn = new JButton("?? Refresh");
+        JButton refreshBtn = new JButton("Refresh");
         refreshBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         refreshBtn.setBackground(CARD_BG);
         refreshBtn.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
@@ -225,18 +225,13 @@ public class GitHubProgressFrame extends JPanel {
     }
 
     private void loadProgressData() {
-        // First, check GitHub for latest commits
         commitChecker.checkAndUpdateAllTasks(user);
         
         tableModel.setRowCount(0);
 
-        // Get all goals for the user
         List<Goal> goals = goalDAO.findByUserId(user.getId());
-        
-        // Get all tasks for the user
         List<DailyTask> allTasks = taskDAO.findByUserId(user.getId());
         
-        // Group tasks by repository
         Map<String, List<DailyTask>> tasksByRepo = new HashMap<>();
         for (DailyTask task : allTasks) {
             tasksByRepo.computeIfAbsent(task.getRepositoryName(), k -> new ArrayList<>()).add(task);
@@ -245,14 +240,11 @@ public class GitHubProgressFrame extends JPanel {
         int totalCommits = 0;
         int activeRepos = 0;
         LocalDate latestCommit = null;
-        int currentStreak = 0;
 
-        // Add data for each goal/repository
         for (Goal goal : goals) {
             String repoName = goal.getRepositoryName();
             List<DailyTask> repoTasks = tasksByRepo.getOrDefault(repoName, new ArrayList<>());
             
-            // Calculate progress for this repository
             int totalTasks = repoTasks.size();
             int completedTasks = 0;
             LocalDate lastCommitDate = null;
@@ -269,23 +261,19 @@ public class GitHubProgressFrame extends JPanel {
                 }
             }
             
-            // Calculate progress percentage
             int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
-            
-            // Determine status
             String status = determineStatus(repoTasks);
+            
             if (status.equals("Green")) {
                 activeRepos++;
             }
             
-            // Track latest commit
             if (lastCommitDate != null) {
                 if (latestCommit == null || lastCommitDate.isAfter(latestCommit)) {
                     latestCommit = lastCommitDate;
                 }
             }
             
-            // Add row to table
             tableModel.addRow(new Object[]{
                 repoName,
                 progress,
@@ -294,13 +282,11 @@ public class GitHubProgressFrame extends JPanel {
             });
         }
         
-        // Calculate streak from tasks
-        currentStreak = calculateStreak(allTasks);
+        int currentStreak = calculateStreak(allTasks);
         
-        // Update stats
         totalCommitsLabel.setText(String.valueOf(totalCommits));
         activeReposLabel.setText(String.valueOf(activeRepos));
-        streakLabel.setText("?? " + currentStreak + " days");
+        streakLabel.setText(currentStreak + " days");
         
         if (latestCommit != null) {
             long daysAgo = java.time.temporal.ChronoUnit.DAYS.between(latestCommit, LocalDate.now());
@@ -325,7 +311,7 @@ public class GitHubProgressFrame extends JPanel {
         
         for (DailyTask task : tasks) {
             if (task.isCompleted() && task.getTaskDate().equals(today)) {
-                return "Green"; // Active - committed today
+                return "Green";
             }
             if (task.isCompleted() && task.getTaskDate().equals(today.minusDays(1))) {
                 hasRecent = true;
@@ -335,8 +321,8 @@ public class GitHubProgressFrame extends JPanel {
             }
         }
         
-        if (hasRecent) return "Yellow"; // Delayed - last commit yesterday
-        if (hasDelayed) return "Red"; // Missed - missed recent tasks
+        if (hasRecent) return "Yellow";
+        if (hasDelayed) return "Red";
         return "No activity";
     }
 
@@ -344,7 +330,7 @@ public class GitHubProgressFrame extends JPanel {
         int streak = 0;
         LocalDate today = LocalDate.now();
         
-        for (int i = 0; i < 30; i++) { // Check last 30 days
+        for (int i = 0; i < 30; i++) {
             LocalDate checkDate = today.minusDays(i);
             boolean committed = false;
             
@@ -358,7 +344,7 @@ public class GitHubProgressFrame extends JPanel {
             if (committed) {
                 streak++;
             } else {
-                break; // Streak broken
+                break;
             }
         }
         
@@ -376,17 +362,15 @@ public class GitHubProgressFrame extends JPanel {
         return date.format(DateTimeFormatter.ofPattern("MMM d, yyyy"));
     }
 
-    // Custom cell renderers
     class RepositoryCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
-
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             setBorder(new EmptyBorder(10, 15, 10, 15));
             setFont(new Font("Segoe UI", Font.BOLD, 13));
             setForeground(new Color(17, 24, 39));
-            setText("?? " + value.toString());
+            setText(value.toString());
             return c;
         }
     }
@@ -405,7 +389,6 @@ public class GitHubProgressFrame extends JPanel {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
-
             int progress = Integer.parseInt(value.toString());
             progressBar.setValue(progress);
             progressBar.setString(progress + "%");
@@ -432,7 +415,6 @@ public class GitHubProgressFrame extends JPanel {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
-
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             setBorder(new EmptyBorder(10, 15, 10, 15));
             setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -441,17 +423,14 @@ public class GitHubProgressFrame extends JPanel {
                 String date = value.toString();
                 if (date.equals("Today")) {
                     setForeground(SUCCESS_COLOR);
-                    setText("? " + date);
                 } else if (date.equals("Yesterday")) {
                     setForeground(WARNING_COLOR);
-                    setText("? " + date);
                 } else if (date.contains("ago")) {
                     setForeground(new Color(107, 114, 128));
                 } else {
                     setForeground(new Color(17, 24, 39));
                 }
             }
-
             return c;
         }
     }
@@ -460,9 +439,6 @@ public class GitHubProgressFrame extends JPanel {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int column) {
-
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
             JPanel panel = new JPanel(new GridBagLayout());
             panel.setBackground(isSelected ? table.getSelectionBackground() : CARD_BG);
 
@@ -474,22 +450,22 @@ public class GitHubProgressFrame extends JPanel {
             String status = value.toString();
             switch (status) {
                 case "Green":
-                    badge.setText("? Active");
+                    badge.setText("Active");
                     badge.setForeground(Color.WHITE);
                     badge.setBackground(SUCCESS_COLOR);
                     break;
                 case "Yellow":
-                    badge.setText("? Delayed");
+                    badge.setText("Delayed");
                     badge.setForeground(Color.WHITE);
                     badge.setBackground(WARNING_COLOR);
                     break;
                 case "Red":
-                    badge.setText("? Missed");
+                    badge.setText("Missed");
                     badge.setForeground(Color.WHITE);
                     badge.setBackground(DANGER_COLOR);
                     break;
                 default:
-                    badge.setText("? No activity");
+                    badge.setText("No activity");
                     badge.setForeground(Color.WHITE);
                     badge.setBackground(new Color(156, 163, 175));
             }

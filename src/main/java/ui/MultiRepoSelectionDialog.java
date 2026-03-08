@@ -14,7 +14,7 @@ public class MultiRepoSelectionDialog extends JDialog {
     
     private User user;
     private List<Map<String, String>> repositories;
-    private JPanel centerPanel; // Store reference to center panel
+    private JPanel centerPanel;
     private DefaultTableModel tableModel;
     private JComboBox<String> durationCombo;
     private JSpinner hoursSpinner;
@@ -83,7 +83,7 @@ public class MultiRepoSelectionDialog extends JDialog {
             new EmptyBorder(20, 25, 20, 25)
         ));
         
-        JLabel titleLabel = new JLabel("?? Configure Your Study Plan");
+        JLabel titleLabel = new JLabel("Configure Your Study Plan");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(new Color(17, 24, 39));
         
@@ -227,7 +227,7 @@ public class MultiRepoSelectionDialog extends JDialog {
         gbc.gridwidth = 4;
         gbc.anchor = GridBagConstraints.CENTER;
         
-        JButton generateBtn = new JButton("?? Generate Smart Plan");
+        JButton generateBtn = new JButton("Generate Smart Plan");
         generateBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
         generateBtn.setForeground(Color.WHITE);
         generateBtn.setBackground(SUCCESS_COLOR);
@@ -278,7 +278,7 @@ public class MultiRepoSelectionDialog extends JDialog {
         }
         
         if (selectedRepos.isEmpty()) {
-            statusLabel.setText("? Please select at least one repository");
+            statusLabel.setText("Please select at least one repository");
             statusLabel.setForeground(DANGER_COLOR);
             return;
         }
@@ -286,7 +286,7 @@ public class MultiRepoSelectionDialog extends JDialog {
         // Validate features input
         for (int i = 0; i < features.size(); i++) {
             if (features.get(i).trim().isEmpty()) {
-                statusLabel.setText("? Please enter target features for all selected repositories");
+                statusLabel.setText("Please enter target features for all selected repositories");
                 statusLabel.setForeground(DANGER_COLOR);
                 return;
             }
@@ -296,7 +296,7 @@ public class MultiRepoSelectionDialog extends JDialog {
         int durationMonths = durationCombo.getSelectedIndex() + 1;
         int dailyHours = (Integer) hoursSpinner.getValue();
         
-        statusLabel.setText("? Generating your smart study plan...");
+        statusLabel.setText("Generating your smart study plan...");
         statusLabel.setForeground(PRIMARY_COLOR);
         
         // Generate plan in background
@@ -309,7 +309,7 @@ public class MultiRepoSelectionDialog extends JDialog {
                 } catch (Exception e) {
                     e.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
-                        statusLabel.setText("? Error: " + e.getMessage());
+                        statusLabel.setText("Error: " + e.getMessage());
                         statusLabel.setForeground(DANGER_COLOR);
                     });
                 }
@@ -318,13 +318,13 @@ public class MultiRepoSelectionDialog extends JDialog {
             
             @Override
             protected void done() {
-                statusLabel.setText("? Study plan generated successfully!");
+                statusLabel.setText("Study plan generated successfully!");
                 statusLabel.setForeground(SUCCESS_COLOR);
                 planGenerated = true;
                 
                 // Show summary
                 StringBuilder summary = new StringBuilder();
-                summary.append("?? Study Plan Generated!\n\n");
+                summary.append("Study Plan Generated!\n\n");
                 summary.append("Duration: ").append(durationMonths).append(" months\n");
                 summary.append("Daily Hours: ").append(dailyHours).append("\n");
                 summary.append("Repositories: ").append(selectedRepos.size()).append("\n\n");
