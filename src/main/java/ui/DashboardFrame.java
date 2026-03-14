@@ -24,10 +24,12 @@ public class DashboardFrame extends JPanel {
     private JLabel dateLabel;
     private JLabel progressPercentageLabel;
     private JProgressBar dailyProgressBar;
+    private JLabel streakLabel; // 🔥 New streak label
 
     // Colors
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
     private final Color SUCCESS_COLOR = new Color(34, 197, 94);
+    private final Color WARNING_COLOR = new Color(245, 158, 11);
     private final Color CARD_BG = Color.WHITE;
     private final Color TEXT_PRIMARY = new Color(17, 24, 39);
     private final Color TEXT_SECONDARY = new Color(107, 114, 128);
@@ -59,9 +61,14 @@ public class DashboardFrame extends JPanel {
         // Active Plan Info
         JPanel activePlanPanel = createActivePlanPanel();
         contentPanel.add(activePlanPanel);
+        contentPanel.add(Box.createVerticalStrut(10));
+
+        // Streak Panel 🔥
+        JPanel streakPanel = createStreakPanel();
+        contentPanel.add(streakPanel);
         contentPanel.add(Box.createVerticalStrut(20));
 
-        // Daily Progress Card (ONLY)
+        // Daily Progress Card
         JPanel progressCard = createDailyProgressCard();
         contentPanel.add(progressCard);
         contentPanel.add(Box.createVerticalStrut(50));
@@ -140,6 +147,24 @@ public class DashboardFrame extends JPanel {
         return panel;
     }
 
+    // 🔥 NEW: Streak panel
+    private JPanel createStreakPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        panel.setBackground(CARD_BG);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(10, 20, 10, 20)
+        ));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+
+        streakLabel = new JLabel("🔥 Current Streak: 0 days");
+        streakLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        streakLabel.setForeground(WARNING_COLOR);
+        panel.add(streakLabel);
+
+        return panel;
+    }
+
     private JPanel createDailyProgressCard() {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(CARD_BG);
@@ -193,6 +218,7 @@ public class DashboardFrame extends JPanel {
             progressPercentageLabel.setText("0%");
             dailyProgressBar.setValue(0);
             dailyProgressBar.setString("0% (0/0)");
+            streakLabel.setText("🔥 No active plan selected");
             revalidate();
             repaint();
             return;
@@ -211,6 +237,10 @@ public class DashboardFrame extends JPanel {
         progressPercentageLabel.setText(todayProgress + "%");
         dailyProgressBar.setValue(todayProgress);
         dailyProgressBar.setString(todayProgress + "% (" + completedToday + "/" + totalToday + ")");
+
+        // Update streak
+        int streak = studyTaskDAO.calculateStreak(activePlanId);
+        streakLabel.setText("🔥 Current Streak: " + streak + " day" + (streak != 1 ? "s" : ""));
 
         revalidate();
         repaint();

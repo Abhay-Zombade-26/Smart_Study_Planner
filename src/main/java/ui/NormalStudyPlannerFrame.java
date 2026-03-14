@@ -29,7 +29,7 @@ public class NormalStudyPlannerFrame extends JFrame {
     private JPanel contentPanel;
     private CardLayout cardLayout;
 
-    // Dashboard components - Now all handled by DashboardFrame
+    // Dashboard components
     private JLabel welcomeLabel;
     private JLabel dateLabel;
 
@@ -64,6 +64,7 @@ public class NormalStudyPlannerFrame extends JFrame {
     private final Color SUCCESS_COLOR = new Color(34, 197, 94);
     private final Color WARNING_COLOR = new Color(245, 158, 11);
     private final Color DANGER_COLOR = new Color(239, 68, 68);
+    private final Color MISSED_COLOR = new Color(220, 38, 38);
     private final Color DARK_BG = new Color(17, 24, 39);
     private final Color SIDEBAR_BG = new Color(31, 41, 55);
     private final Color CARD_BG = Color.WHITE;
@@ -253,13 +254,12 @@ public class NormalStudyPlannerFrame extends JFrame {
             button.setBackground(new Color(55, 65, 81));
 
             if (cardName.equals("DASHBOARD")) {
-                // Dashboard refresh is handled by DashboardFrame
                 Component comp = contentPanel.getComponent(0);
                 if (comp instanceof DashboardFrame) {
                     ((DashboardFrame) comp).refreshDashboard();
                 }
             } else if (cardName.equals("STUDY_PLAN")) {
-                refreshStudyPlan(); // Refresh tasks when switching to Study Plan tab
+                refreshStudyPlan();
             } else if (cardName.equals("PROFILE")) {
                 refreshProfile();
             }
@@ -267,6 +267,34 @@ public class NormalStudyPlannerFrame extends JFrame {
 
         sidebarPanel.add(button);
         sidebarPanel.add(Box.createVerticalStrut(8));
+    }
+
+    // 🔥 MODIFIED: Now redirects to PlanManagementFrame when user clicks YES
+    // 🔥 FIXED: Opens PlanManagementFrame without auto-rescheduling
+    private void checkAndHandleMissedTasks() {
+        Integer activePlanId = user.getActivePlanId();
+        if (activePlanId == null) return;
+
+        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(activePlanId);
+
+        if (!missedTasks.isEmpty()) {
+            int response = JOptionPane.showConfirmDialog(this,
+                    "❌ You have " + missedTasks.size() + " missed task(s) from previous days.\n" +
+                            "Would you like to open the plan manager to reschedule them?",
+                    "Missed Tasks Detected",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+
+            if (response == JOptionPane.YES_OPTION) {
+                StudyPlan plan = studyPlanDAO.findById(activePlanId);
+                if (plan != null) {
+                    // Open PlanManagementFrame - it will handle rescheduling when user clicks button
+                    PlanManagementFrame managementFrame = new PlanManagementFrame(user, plan);
+                    managementFrame.setVisible(true);
+                    managementFrame.toFront();
+                }
+            }
+        }
     }
 
     private JPanel createStudyPlanPanel() {
@@ -302,7 +330,7 @@ public class NormalStudyPlannerFrame extends JFrame {
         contentPanel.add(topSection);
         contentPanel.add(Box.createVerticalStrut(25));
 
-        // TODAY'S TASKS SECTION (moved from Dashboard)
+        // TODAY'S TASKS SECTION
         tasksCard = createTodayTasksPanel();
         contentPanel.add(tasksCard);
         contentPanel.add(Box.createVerticalStrut(25));
@@ -351,7 +379,7 @@ public class NormalStudyPlannerFrame extends JFrame {
                     int index = taskList.locationToIndex(evt.getPoint());
                     if (index >= 0) {
                         String taskStr = taskListModel.get(index);
-                        if (!taskStr.startsWith("🎉") && !taskStr.startsWith("🎯")) {
+                        if (!taskStr.startsWith("🎉") && !taskStr.startsWith("🎯") && !taskStr.startsWith("❌") && !taskStr.contains("---")) {
                             Integer activePlanId = user.getActivePlanId();
                             if (activePlanId != null) {
                                 List<StudyTask> tasks = studyTaskDAO.findTodayTasksByPlan(activePlanId);
@@ -359,7 +387,7 @@ public class NormalStudyPlannerFrame extends JFrame {
                                     StudyTask task = tasks.get(index);
                                     String newStatus = "COMPLETED".equals(task.getStatus()) ? "PENDING" : "COMPLETED";
                                     studyTaskDAO.updateStatus(task.getId(), newStatus);
-                                    refreshStudyPlan(); // Refresh this panel
+                                    refreshStudyPlan();
                                 }
                             }
                         }
@@ -664,12 +692,14 @@ public class NormalStudyPlannerFrame extends JFrame {
     }
 
     private void refreshDashboard() {
-        // Dashboard is handled by DashboardFrame
         System.out.println("Dashboard refresh triggered");
     }
 
     private void refreshStudyPlan() {
         System.out.println("\n=== REFRESHING STUDY PLAN ===");
+
+        // Check for missed tasks and offer rescheduling
+        checkAndHandleMissedTasks();
 
         // Refresh today's tasks
         taskListModel.clear();
@@ -684,7 +714,16 @@ public class NormalStudyPlannerFrame extends JFrame {
                 System.out.println("  Task: " + task.getDescription() + " - " + task.getStatus());
             }
 
-            if (todayTasks.isEmpty()) {
+            // Also show missed tasks (from previous days) at the bottom
+            List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(activePlanId);
+            if (!missedTasks.isEmpty()) {
+                taskListModel.addElement("--- Missed Tasks (previous days) ---");
+                for (StudyTask task : missedTasks) {
+                    taskListModel.addElement("❌ " + task.getDescription() + " (" + task.getTaskDate() + ")");
+                }
+            }
+
+            if (todayTasks.isEmpty() && missedTasks.isEmpty()) {
                 taskListModel.addElement("🎉 No tasks for today! Create a plan and generate tasks.");
             }
         } else {
@@ -712,7 +751,6 @@ public class NormalStudyPlannerFrame extends JFrame {
     }
 
     private void createPlan() {
-        // Collect selected subjects from checkboxes
         List<String> selectedSubjects = new ArrayList<>();
         if (marathiCheckbox.isSelected()) selectedSubjects.add("Marathi");
         if (hindiCheckbox.isSelected()) selectedSubjects.add("Hindi");
@@ -723,13 +761,11 @@ public class NormalStudyPlannerFrame extends JFrame {
         if (historyCheckbox.isSelected()) selectedSubjects.add("History");
         if (geographyCheckbox.isSelected()) selectedSubjects.add("Geography");
 
-        // Add custom subject if entered
         String custom = customSubjectField.getText().trim();
         if (!custom.isEmpty()) {
             selectedSubjects.add(custom);
         }
 
-        // Validate at least one subject selected
         if (selectedSubjects.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Please select at least one subject or enter a custom subject.",
@@ -747,7 +783,6 @@ public class NormalStudyPlannerFrame extends JFrame {
                     .atZone(ZoneId.systemDefault())
                     .toLocalDate();
 
-            // Map difficulty from display to database enum
             String difficulty = (String) difficultyCombo.getSelectedItem();
             String difficultyEnum;
             if ("Easy".equals(difficulty)) {
@@ -758,7 +793,6 @@ public class NormalStudyPlannerFrame extends JFrame {
                 difficultyEnum = "HARD";
             }
 
-            // Validate future date
             if (examDate.isBefore(LocalDate.now())) {
                 JOptionPane.showMessageDialog(this,
                         "Exam date must be in the future!",
@@ -767,7 +801,6 @@ public class NormalStudyPlannerFrame extends JFrame {
                 return;
             }
 
-            // Ensure user ID is set
             if (user.getId() == 0) {
                 UserDAO userDAO = new UserDAO();
                 User dbUser = userDAO.findByEmail(user.getEmail());
@@ -782,7 +815,6 @@ public class NormalStudyPlannerFrame extends JFrame {
                 }
             }
 
-            // Create StudyPlan using the constructor that takes subjects
             StudyPlan plan = planGenerator.generatePlan(
                     user,
                     subjectsStr,
@@ -797,12 +829,10 @@ public class NormalStudyPlannerFrame extends JFrame {
                         "Success",
                         JOptionPane.INFORMATION_MESSAGE);
 
-                // Open PlanManagementFrame for this plan
                 SwingUtilities.invokeLater(() -> {
                     new PlanManagementFrame(user, plan).setVisible(true);
                 });
 
-                // Optionally switch to dashboard
                 cardLayout.show(contentPanel, "DASHBOARD");
                 refreshDashboard();
             } else {
@@ -827,7 +857,6 @@ public class NormalStudyPlannerFrame extends JFrame {
     }
 
     private void setupEventListeners() {
-        // Task list mouse listener is now in createTodayTasksPanel()
         addWindowListener(new java.awt.event.WindowAdapter() {
             public void windowClosing(java.awt.event.WindowEvent e) {
                 int confirm = JOptionPane.showConfirmDialog(
@@ -871,12 +900,18 @@ public class NormalStudyPlannerFrame extends JFrame {
             if (text.startsWith("✅")) {
                 setForeground(SUCCESS_COLOR);
                 setFont(getFont().deriveFont(Font.BOLD));
-            } else if (text.startsWith("🎉")) {
+            } else if (text.startsWith("❌")) {
+                setForeground(MISSED_COLOR);
+                setFont(getFont().deriveFont(Font.BOLD));
+            } else if (text.startsWith("🎉") || text.startsWith("🎯")) {
                 setForeground(PRIMARY_COLOR);
                 setFont(getFont().deriveFont(Font.ITALIC));
-            } else if (text.startsWith("⬜") || text.startsWith("🎯")) {
+            } else if (text.startsWith("⬜")) {
                 setForeground(TEXT_PRIMARY);
                 setFont(getFont().deriveFont(Font.PLAIN));
+            } else if (text.contains("---")) {
+                setForeground(TEXT_SECONDARY);
+                setFont(getFont().deriveFont(Font.BOLD));
             }
 
             setBorder(new EmptyBorder(8, 10, 8, 10));

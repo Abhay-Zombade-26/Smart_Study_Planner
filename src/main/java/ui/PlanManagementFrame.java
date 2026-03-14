@@ -9,20 +9,19 @@ import dao.StudyTaskDAO;
 import dao.TopicDAO;
 import service.NormalPlanGenerator;
 import service.TopicWeightCalculator;
+import service.PlanRescheduler;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Map;
 
 public class PlanManagementFrame extends JFrame {
 
@@ -33,6 +32,7 @@ public class PlanManagementFrame extends JFrame {
     private TopicDAO topicDAO;
     private NormalPlanGenerator planGenerator;
     private TopicWeightCalculator weightCalculator;
+    private PlanRescheduler planRescheduler;
 
     // UI Components
     private JLabel planIdLabel;
@@ -45,14 +45,13 @@ public class PlanManagementFrame extends JFrame {
     private JLabel statsLabel;
     private DefaultListModel<String> topicListModel;
     private JList<String> topicList;
-
-    // Store task IDs in the same order as table rows
-    private List<Integer> taskIdList;
+    private JLabel missedTasksLabel;
 
     // Colors
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
     private final Color SUCCESS_COLOR = new Color(34, 197, 94);
     private final Color DANGER_COLOR = new Color(239, 68, 68);
+    private final Color WARNING_COLOR = new Color(245, 158, 11);
     private final Color CARD_BG = Color.WHITE;
     private final Color TEXT_PRIMARY = new Color(17, 24, 39);
     private final Color BORDER_COLOR = new Color(229, 231, 235);
@@ -65,18 +64,19 @@ public class PlanManagementFrame extends JFrame {
         this.topicDAO = new TopicDAO();
         this.planGenerator = new NormalPlanGenerator();
         this.weightCalculator = new TopicWeightCalculator();
-        this.taskIdList = new ArrayList<>();
+        this.planRescheduler = new PlanRescheduler();
 
         initUI();
         loadPlanData();
         loadTopics();
         loadTasks();
+        checkMissedTasks();
     }
 
     private void initUI() {
         setTitle("Manage Study Plan - ID: " + plan.getId());
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(1000, 700);
+        setSize(1000, 750);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
@@ -176,6 +176,15 @@ public class PlanManagementFrame extends JFrame {
         statsLabel.setForeground(PRIMARY_COLOR);
         panel.add(statsLabel, gbc);
 
+        // Missed tasks indicator
+        gbc.gridx = 0; gbc.gridy = 6;
+        panel.add(new JLabel("Missed Tasks:"), gbc);
+        gbc.gridx = 1;
+        missedTasksLabel = new JLabel("0");
+        missedTasksLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        missedTasksLabel.setForeground(DANGER_COLOR);
+        panel.add(missedTasksLabel, gbc);
+
         return panel;
     }
 
@@ -249,18 +258,6 @@ public class PlanManagementFrame extends JFrame {
             tasksTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
 
-        // Add double-click listener to toggle task status
-        tasksTable.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    int row = tasksTable.getSelectedRow();
-                    if (row >= 0 && row < taskIdList.size()) {
-                        toggleTaskStatus(row);
-                    }
-                }
-            }
-        });
-
         JScrollPane scrollPane = new JScrollPane(tasksTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
         scrollPane.setPreferredSize(new Dimension(400, 300));
@@ -284,10 +281,16 @@ public class PlanManagementFrame extends JFrame {
         JButton deletePlanBtn = createStyledButton("Delete Plan", DANGER_COLOR);
         deletePlanBtn.addActionListener(e -> deletePlan());
 
+        // RESCHEDULE BUTTON
+        JButton rescheduleBtn = createStyledButton("🔄 Reschedule Missed", WARNING_COLOR);
+        rescheduleBtn.addActionListener(e -> rescheduleMissedTasks());
+        rescheduleBtn.setToolTipText("Distribute missed tasks across remaining days");
+
         JButton refreshBtn = createStyledButton("Refresh", PRIMARY_COLOR);
         refreshBtn.addActionListener(e -> {
             loadTopics();
             loadTasks();
+            checkMissedTasks();
         });
 
         JButton closeBtn = createStyledButton("Close", new Color(100, 116, 139));
@@ -296,6 +299,7 @@ public class PlanManagementFrame extends JFrame {
         panel.add(generateTasksBtn);
         panel.add(updatePlanBtn);
         panel.add(deletePlanBtn);
+        panel.add(rescheduleBtn);
         panel.add(refreshBtn);
         panel.add(closeBtn);
 
@@ -310,7 +314,7 @@ public class PlanManagementFrame extends JFrame {
         button.setBorderPainted(false);
         button.setFocusPainted(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.setPreferredSize(new Dimension(120, 35));
+        button.setPreferredSize(new Dimension(140, 35));
         return button;
     }
 
@@ -340,17 +344,17 @@ public class PlanManagementFrame extends JFrame {
 
     private void loadTasks() {
         tableModel.setRowCount(0);
-        taskIdList.clear();
         List<StudyTask> tasks = studyTaskDAO.findByGoalId(plan.getId());
         int completed = 0;
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
         for (StudyTask task : tasks) {
-            taskIdList.add(task.getId());
             String status;
             if ("COMPLETED".equals(task.getStatus())) {
                 status = "✅ Completed";
                 completed++;
-            } else if ("MISSED".equals(task.getStatus())) {
+            } else if (task.getTaskDate().isBefore(today) && !"COMPLETED".equals(task.getStatus())) {
                 status = "❌ Missed";
             } else {
                 status = "⏳ Pending";
@@ -366,44 +370,85 @@ public class PlanManagementFrame extends JFrame {
         statsLabel.setText(completed + "/" + total + " (" + progress + "%)");
     }
 
-    private void toggleTaskStatus(int row) {
-        int taskId = taskIdList.get(row);
-        // Get current status from database (or from table, but safer to refetch)
-        List<StudyTask> tasks = studyTaskDAO.findByGoalId(plan.getId());
-        StudyTask task = tasks.stream().filter(t -> t.getId() == taskId).findFirst().orElse(null);
-        if (task == null) return;
+    private void checkMissedTasks() {
+        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
+        int missedCount = missedTasks.size();
+        missedTasksLabel.setText(String.valueOf(missedCount));
 
-        String newStatus = "COMPLETED".equals(task.getStatus()) ? "PENDING" : "COMPLETED";
-        studyTaskDAO.updateStatus(taskId, newStatus);
-
-        // Reload tasks to reflect change
-        loadTasks();
-
-        // Refresh any open DashboardFrame
-        refreshDashboardIfOpen();
+        if (missedCount > 0) {
+            missedTasksLabel.setForeground(DANGER_COLOR);
+        } else {
+            missedTasksLabel.setForeground(SUCCESS_COLOR);
+        }
     }
 
-    // Helper to find and refresh any open DashboardFrame
-    private void refreshDashboardIfOpen() {
-        for (Window window : Window.getWindows()) {
-            if (window instanceof JFrame) {
-                JFrame frame = (JFrame) window;
-                // Check if the frame contains a DashboardFrame (it might be the content pane or a panel)
-                Component[] components = frame.getContentPane().getComponents();
-                for (Component comp : components) {
-                    if (comp instanceof DashboardFrame) {
-                        ((DashboardFrame) comp).refresh();
-                        return;
-                    } else if (comp instanceof JPanel) {
-                        // Recursively search panels (simplified: just one level)
-                        for (Component sub : ((JPanel) comp).getComponents()) {
-                            if (sub instanceof DashboardFrame) {
-                                ((DashboardFrame) sub).refresh();
-                                return;
-                            }
-                        }
-                    }
+    private void rescheduleMissedTasks() {
+        // Refresh plan data first to get latest daily hours
+        plan = studyPlanDAO.findById(plan.getId());
+
+        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
+
+        if (missedTasks.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No missed tasks to reschedule! Great job! 🎉",
+                    "No Missed Tasks",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // Show current plan info
+        long daysRemaining = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), plan.getDeadline());
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "You have " + missedTasks.size() + " missed task(s).\n" +
+                        "Current daily hours: " + plan.getDailyHours() + "\n" +
+                        "Days remaining: " + daysRemaining + "\n\n" +
+                        "These will be distributed evenly across your remaining days.\n" +
+                        "Continue?",
+                "Reschedule Missed Tasks",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        // Use the PlanRescheduler
+        PlanRescheduler.RescheduleResult result = planRescheduler.rescheduleMissedTasks(plan.getId(), missedTasks);
+
+        if (result.success) {
+            // Show distribution summary
+            StringBuilder message = new StringBuilder("✅ " + result.message + "\n\nNew distribution:\n");
+            if (result.newDistribution != null) {
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
+                for (Map.Entry<LocalDate, Integer> entry : result.newDistribution.entrySet()) {
+                    message.append("• ").append(entry.getKey().format(fmt))
+                            .append(": ").append(entry.getValue()).append(" tasks\n");
                 }
+            }
+
+            JOptionPane.showMessageDialog(this,
+                    message.toString(),
+                    "Rescheduling Successful",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+            // Refresh the view
+            loadTasks();
+            checkMissedTasks();
+        } else {
+            if (result.message.contains("increase daily hours")) {
+                JOptionPane.showMessageDialog(this,
+                        "❌ " + result.message + "\n\n" +
+                                "To fix this:\n" +
+                                "1. Click 'Update Plan' button\n" +
+                                "2. Increase the 'Hours per Day' value\n" +
+                                "3. Click 'Update Plan' to save\n" +
+                                "4. Try rescheduling again",
+                        "Need More Hours",
+                        JOptionPane.WARNING_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "❌ " + result.message,
+                        "Rescheduling Failed",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -444,7 +489,7 @@ public class PlanManagementFrame extends JFrame {
 
         JOptionPane.showMessageDialog(this, "Tasks generated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
         loadTasks();
-        refreshDashboardIfOpen();
+        checkMissedTasks();
     }
 
     private void updatePlan() {
@@ -464,31 +509,24 @@ public class PlanManagementFrame extends JFrame {
             }
 
             if (newDeadline.isBefore(LocalDate.now())) {
-                JOptionPane.showMessageDialog(this,
-                        "Exam date must be in the future!",
-                        "Invalid Date",
-                        JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Exam date must be in the future!", "Invalid Date", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
             plan.setDeadline(newDeadline);
             plan.setDailyHours(newHours);
             plan.setDifficulty(difficultyEnum);
-
             studyPlanDAO.update(plan);
 
-            JOptionPane.showMessageDialog(this,
-                    "Plan updated successfully!",
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE);
-
+            JOptionPane.showMessageDialog(this, "Plan updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             loadPlanData();
+
+            // After updating, check if missed tasks can now be rescheduled
+            checkMissedTasks();
+
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error: " + e.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
