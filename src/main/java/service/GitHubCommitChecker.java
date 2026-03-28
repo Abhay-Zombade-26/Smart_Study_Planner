@@ -76,7 +76,13 @@ public class GitHubCommitChecker {
             // Check if commit exists for this task
             int actualCommits = getCommitsForDate(user, repoName, task.getTaskDate());
 
-            // CRITICAL: Update task with actual commits
+            // CRITICAL: Set planned_commits to 1 if it's 0 (for display)
+            if (task.getPlannedCommits() == 0) {
+                task.setPlannedCommits(1);
+                taskDAO.updatePlannedCommits(task.getId(), 1);
+            }
+
+            // Update task with actual commits
             task.setActualCommits(actualCommits);
             taskDAO.updateCommitCount(task.getId(), actualCommits);
 
@@ -86,14 +92,15 @@ public class GitHubCommitChecker {
             if (actualCommits > 0) {
                 newStatus = "COMPLETED";
                 completed++;
-                System.out.println("✅ Task COMPLETED: " + task.getDescription() + " on " + task.getTaskDate() + " - Commits: " + actualCommits);
+                System.out.println("✅ Task COMPLETED: " + task.getDescription() + " on " + task.getTaskDate() + " - Commits: " + actualCommits + "/1");
             } else if (task.getTaskDate().isBefore(LocalDate.now())) {
                 newStatus = "MISSED";
                 missed++;
-                System.out.println("❌ Task MISSED: " + task.getDescription() + " on " + task.getTaskDate());
+                System.out.println("❌ Task MISSED: " + task.getDescription() + " on " + task.getTaskDate() + " - Commits: 0/1");
             } else {
                 newStatus = "PENDING";
                 pending++;
+                System.out.println("⏳ Task PENDING: " + task.getDescription() + " on " + task.getTaskDate() + " - Commits: 0/1");
             }
 
             if (!newStatus.equals(oldStatus)) {
