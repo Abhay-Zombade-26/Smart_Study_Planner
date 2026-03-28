@@ -13,9 +13,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.List;
 
-public class StudyPlanListFrame extends JFrame {
+public class StudyPlanListFrame extends JDialog {
 
-    private NormalStudyPlannerFrame parentFrame;   // reference to main frame (ADD THIS)
+    private NormalStudyPlannerFrame parentFrame;
     private User user;
     private StudyPlanDAO studyPlanDAO;
     private StudyTaskDAO studyTaskDAO;
@@ -29,9 +29,9 @@ public class StudyPlanListFrame extends JFrame {
     private final Color CARD_BG = Color.WHITE;
     private final Color BORDER_COLOR = new Color(229, 231, 235);
 
-    // UPDATED CONSTRUCTOR – takes parent frame
     public StudyPlanListFrame(NormalStudyPlannerFrame parent, User user) {
-        this.parentFrame = parent;   // store parent
+        super(parent, "My Study Plans", true);
+        this.parentFrame = parent;
         this.user = user;
         this.studyPlanDAO = new StudyPlanDAO();
         this.studyTaskDAO = new StudyTaskDAO();
@@ -43,16 +43,15 @@ public class StudyPlanListFrame extends JFrame {
 
     private void initUI() {
         setTitle("My Study Plans");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         setSize(1000, 500);
-        setLocationRelativeTo(null);
+        setLocationRelativeTo(parentFrame);
         setLayout(new BorderLayout());
 
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
         mainPanel.setBackground(CARD_BG);
 
-        // Header
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(CARD_BG);
         headerPanel.setBorder(new EmptyBorder(0, 0, 15, 0));
@@ -72,7 +71,6 @@ public class StudyPlanListFrame extends JFrame {
         headerPanel.add(titleLabel, BorderLayout.WEST);
         headerPanel.add(refreshBtn, BorderLayout.EAST);
 
-        // Table with two button columns
         String[] columns = {"Plan ID", "Subjects", "Deadline", "Tasks", "Progress", "Manage", "Activate"};
         tableModel = new DefaultTableModel(columns, 0) {
             public boolean isCellEditable(int r, int c) { return c == 5 || c == 6; }
@@ -84,7 +82,6 @@ public class StudyPlanListFrame extends JFrame {
         plansTable.getTableHeader().setBackground(new Color(249, 250, 251));
         plansTable.setShowGrid(false);
 
-        // Set custom renderers and editors for button columns
         plansTable.getColumn("Manage").setCellRenderer(new ManageButtonRenderer());
         plansTable.getColumn("Manage").setCellEditor(new ManageButtonEditor(new JCheckBox()));
         plansTable.getColumn("Activate").setCellRenderer(new ActivateButtonRenderer());
@@ -101,7 +98,7 @@ public class StudyPlanListFrame extends JFrame {
 
     private void loadPlans() {
         tableModel.setRowCount(0);
-        List<StudyPlan> plans = studyPlanDAO.findByUserId(user.getId());
+        List<StudyPlan> plans = studyPlanDAO.findByUserIdAndRole(user.getId(), "NORMAL", "GOOGLE");
         Integer activePlanId = user.getActivePlanId();
 
         for (StudyPlan plan : plans) {
@@ -127,7 +124,6 @@ public class StudyPlanListFrame extends JFrame {
         }
     }
 
-    // Renderer for Manage button
     class ManageButtonRenderer extends JButton implements javax.swing.table.TableCellRenderer {
         public ManageButtonRenderer() {
             setOpaque(true);
@@ -145,12 +141,10 @@ public class StudyPlanListFrame extends JFrame {
         }
     }
 
-    // Editor for Manage button
     class ManageButtonEditor extends DefaultCellEditor {
         protected JButton button;
         private String label;
         private boolean isPushed;
-        private int selectedRow;
         private int selectedPlanId;
 
         public ManageButtonEditor(JCheckBox checkBox) {
@@ -162,13 +156,11 @@ public class StudyPlanListFrame extends JFrame {
             button.setFont(new Font("Segoe UI", Font.BOLD, 12));
             button.setBorderPainted(false);
             button.setFocusPainted(false);
-
             button.addActionListener(e -> fireEditingStopped());
         }
 
         public Component getTableCellEditorComponent(JTable table, Object value,
                                                      boolean isSelected, int row, int column) {
-            selectedRow = row;
             selectedPlanId = (int) table.getValueAt(row, 0);
             label = (value == null) ? "" : value.toString();
             button.setText(label);
@@ -181,7 +173,15 @@ public class StudyPlanListFrame extends JFrame {
                 StudyPlan plan = studyPlanDAO.findById(selectedPlanId);
                 if (plan != null) {
                     SwingUtilities.invokeLater(() -> {
-                        new PlanManagementFrame(user, plan).setVisible(true);
+                        // Create PlanManagementFrame - modal is set in constructor
+                        PlanManagementFrame managementFrame = new PlanManagementFrame(parentFrame, user, plan);
+                        managementFrame.setVisible(true);
+
+                        // After closing, refresh everything
+                        loadPlans();
+                        if (parentFrame != null) {
+                            parentFrame.refreshAll();
+                        }
                     });
                 }
             }
@@ -199,7 +199,6 @@ public class StudyPlanListFrame extends JFrame {
         }
     }
 
-    // Renderer for Activate/Deactivate button
     class ActivateButtonRenderer extends JButton implements javax.swing.table.TableCellRenderer {
         public ActivateButtonRenderer() {
             setOpaque(true);
@@ -222,12 +221,10 @@ public class StudyPlanListFrame extends JFrame {
         }
     }
 
-    // Editor for Activate/Deactivate button (UPDATED with refresh callback)
     class ActivateButtonEditor extends DefaultCellEditor {
         protected JButton button;
         private String label;
         private boolean isPushed;
-        private int selectedRow;
         private int selectedPlanId;
         private String currentAction;
 
@@ -244,7 +241,6 @@ public class StudyPlanListFrame extends JFrame {
 
         public Component getTableCellEditorComponent(JTable table, Object value,
                                                      boolean isSelected, int row, int column) {
-            selectedRow = row;
             selectedPlanId = (int) table.getValueAt(row, 0);
             currentAction = (String) value;
             label = currentAction;
@@ -264,7 +260,6 @@ public class StudyPlanListFrame extends JFrame {
                     userDAO.updateActivePlan(user.getId(), null);
                     user.setActivePlanId(null);
                     JOptionPane.showMessageDialog(button, "Plan deactivated.");
-                    // --- ADD THIS CALLBACK ---
                     if (parentFrame != null) {
                         parentFrame.refreshDashboardFromPlans();
                     }
@@ -272,12 +267,10 @@ public class StudyPlanListFrame extends JFrame {
                     userDAO.updateActivePlan(user.getId(), selectedPlanId);
                     user.setActivePlanId(selectedPlanId);
                     JOptionPane.showMessageDialog(button, "Plan " + selectedPlanId + " is now active.");
-                    // --- ADD THIS CALLBACK ---
                     if (parentFrame != null) {
                         parentFrame.refreshDashboardFromPlans();
                     }
                 }
-                // Refresh table to update button texts
                 loadPlans();
             }
             isPushed = false;
