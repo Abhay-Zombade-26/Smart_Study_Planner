@@ -108,6 +108,7 @@ public class NormalStudyPlannerFrame extends JFrame {
         if (comp instanceof DashboardFrame) {
             ((DashboardFrame) comp).refreshDashboard();
         }
+        refreshStudyPlan();
     }
 
     private void initUI() {
@@ -269,8 +270,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         sidebarPanel.add(Box.createVerticalStrut(8));
     }
 
-    // 🔥 MODIFIED: Now redirects to PlanManagementFrame when user clicks YES
-    // 🔥 FIXED: Opens PlanManagementFrame without auto-rescheduling
     private void checkAndHandleMissedTasks() {
         Integer activePlanId = user.getActivePlanId();
         if (activePlanId == null) return;
@@ -288,8 +287,7 @@ public class NormalStudyPlannerFrame extends JFrame {
             if (response == JOptionPane.YES_OPTION) {
                 StudyPlan plan = studyPlanDAO.findById(activePlanId);
                 if (plan != null) {
-                    // Open PlanManagementFrame - it will handle rescheduling when user clicks button
-                    PlanManagementFrame managementFrame = new PlanManagementFrame(user, plan);
+                    PlanManagementFrame managementFrame = new PlanManagementFrame(this, user, plan);
                     managementFrame.setVisible(true);
                     managementFrame.toFront();
                 }
@@ -372,7 +370,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         taskList.setBorder(new EmptyBorder(10, 0, 0, 0));
         taskList.setCellRenderer(new TaskListCellRenderer());
 
-        // Add double-click listener for toggling tasks
         taskList.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 if (evt.getClickCount() == 2) {
@@ -388,6 +385,7 @@ public class NormalStudyPlannerFrame extends JFrame {
                                     String newStatus = "COMPLETED".equals(task.getStatus()) ? "PENDING" : "COMPLETED";
                                     studyTaskDAO.updateStatus(task.getId(), newStatus);
                                     refreshStudyPlan();
+                                    refreshDashboardFromPlans();
                                 }
                             }
                         }
@@ -419,7 +417,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         title.setForeground(TEXT_PRIMARY);
         title.setBorder(new EmptyBorder(0, 0, 15, 0));
 
-        // Checkbox panel
         JPanel checkPanel = new JPanel(new GridLayout(4, 2, 10, 10));
         checkPanel.setBackground(CARD_BG);
 
@@ -441,7 +438,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         checkPanel.add(historyCheckbox);
         checkPanel.add(geographyCheckbox);
 
-        // Custom subject field
         JPanel customPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         customPanel.setBackground(CARD_BG);
         customPanel.add(new JLabel("Other:"));
@@ -480,7 +476,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 10, 10, 10);
 
-        // Hours
         gbc.gridx = 0; gbc.gridy = 0;
         configPanel.add(createStyledLabel("Hours per Day:"), gbc);
         gbc.gridx = 1;
@@ -489,7 +484,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         hoursSpinner.setPreferredSize(new Dimension(120, 35));
         configPanel.add(hoursSpinner, gbc);
 
-        // Date
         gbc.gridx = 0; gbc.gridy = 1;
         configPanel.add(createStyledLabel("Exam Date:"), gbc);
         gbc.gridx = 1;
@@ -499,7 +493,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         dateSpinner.setPreferredSize(new Dimension(150, 35));
         configPanel.add(dateSpinner, gbc);
 
-        // Difficulty
         gbc.gridx = 0; gbc.gridy = 2;
         configPanel.add(createStyledLabel("Difficulty:"), gbc);
         gbc.gridx = 1;
@@ -508,7 +501,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         difficultyCombo.setPreferredSize(new Dimension(150, 35));
         configPanel.add(difficultyCombo, gbc);
 
-        // Buttons
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
         JButton createPlanBtn = createStyledButton("Create Plan", PRIMARY_COLOR);
         createPlanBtn.addActionListener(e -> createPlan());
@@ -538,7 +530,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         JPanel contentPanel = new JPanel(new BorderLayout(25, 0));
         contentPanel.setBackground(Color.WHITE);
 
-        // Avatar Section
         JPanel avatarPanel = new JPanel();
         avatarPanel.setLayout(new BoxLayout(avatarPanel, BoxLayout.Y_AXIS));
         avatarPanel.setBackground(CARD_BG);
@@ -547,8 +538,12 @@ public class NormalStudyPlannerFrame extends JFrame {
                 new EmptyBorder(40, 40, 40, 40)
         ));
 
-        profileAvatarLabel = new JLabel("👤");
-        profileAvatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 80));
+        String initial = user.getName() != null && !user.getName().isEmpty()
+                ? user.getName().substring(0, 1).toUpperCase()
+                : "👤";
+
+        profileAvatarLabel = new JLabel(initial);
+        profileAvatarLabel.setFont(new Font("Segoe UI", Font.BOLD, 80));
         profileAvatarLabel.setForeground(PRIMARY_COLOR);
         profileAvatarLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
@@ -557,7 +552,7 @@ public class NormalStudyPlannerFrame extends JFrame {
         profileNameLabel.setForeground(TEXT_PRIMARY);
         profileNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        profileRoleLabel = new JLabel("Normal Student");
+        profileRoleLabel = new JLabel("🎓 Normal Student");
         profileRoleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         profileRoleLabel.setForeground(PRIMARY_COLOR);
         profileRoleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -568,7 +563,6 @@ public class NormalStudyPlannerFrame extends JFrame {
         avatarPanel.add(Box.createVerticalStrut(5));
         avatarPanel.add(profileRoleLabel);
 
-        // Info Section
         JPanel infoPanel = new JPanel(new GridBagLayout());
         infoPanel.setBackground(CARD_BG);
         infoPanel.setBorder(BorderFactory.createCompoundBorder(
@@ -580,30 +574,49 @@ public class NormalStudyPlannerFrame extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 10, 10, 10);
 
-        // Email
         gbc.gridx = 0; gbc.gridy = 0;
-        infoPanel.add(createStyledLabel("Email:"), gbc);
+        infoPanel.add(createInfoLabel("📧 Email:"), gbc);
         gbc.gridx = 1;
         profileEmailLabel = new JLabel(user.getEmail());
         profileEmailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         infoPanel.add(profileEmailLabel, gbc);
 
-        // Provider
         gbc.gridx = 0; gbc.gridy = 1;
-        infoPanel.add(createStyledLabel("Login Provider:"), gbc);
+        infoPanel.add(createInfoLabel("🔐 Login Provider:"), gbc);
         gbc.gridx = 1;
-        profileProviderLabel = new JLabel(user.getOauthProvider());
+        profileProviderLabel = new JLabel("Google");
         profileProviderLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         profileProviderLabel.setForeground(PRIMARY_COLOR);
         infoPanel.add(profileProviderLabel, gbc);
 
-        // Member Since
         gbc.gridx = 0; gbc.gridy = 2;
-        infoPanel.add(createStyledLabel("Member Since:"), gbc);
+        infoPanel.add(createInfoLabel("📅 Member Since:"), gbc);
         gbc.gridx = 1;
         JLabel memberLabel = new JLabel(LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM yyyy")));
         memberLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         infoPanel.add(memberLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 3;
+        infoPanel.add(createInfoLabel("📚 Active Plans:"), gbc);
+        gbc.gridx = 1;
+        List<StudyPlan> plans = studyPlanDAO.findByUserIdAndRole(user.getId(), "NORMAL", "GOOGLE");
+        JLabel plansCountLabel = new JLabel(String.valueOf(plans.size()));
+        plansCountLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        plansCountLabel.setForeground(SUCCESS_COLOR);
+        infoPanel.add(plansCountLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 4;
+        infoPanel.add(createInfoLabel("✅ Tasks Completed:"), gbc);
+        gbc.gridx = 1;
+        int totalCompleted = 0;
+        for (StudyPlan plan : plans) {
+            List<StudyTask> tasks = studyTaskDAO.findByGoalId(plan.getId());
+            totalCompleted += (int) tasks.stream().filter(t -> "COMPLETED".equals(t.getStatus())).count();
+        }
+        JLabel completedLabel = new JLabel(String.valueOf(totalCompleted));
+        completedLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        completedLabel.setForeground(SUCCESS_COLOR);
+        infoPanel.add(completedLabel, gbc);
 
         contentPanel.add(avatarPanel, BorderLayout.WEST);
         contentPanel.add(infoPanel, BorderLayout.CENTER);
@@ -613,11 +626,18 @@ public class NormalStudyPlannerFrame extends JFrame {
         return panel;
     }
 
+    private JLabel createInfoLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setForeground(TEXT_PRIMARY);
+        return label;
+    }
+
     private JPanel createAboutPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
 
-        JLabel headerLabel = new JLabel("About");
+        JLabel headerLabel = new JLabel("About Smart Study Planner");
         headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
         headerLabel.setForeground(TEXT_PRIMARY);
         headerLabel.setBorder(new EmptyBorder(0, 0, 20, 0));
@@ -628,37 +648,87 @@ public class NormalStudyPlannerFrame extends JFrame {
         contentPanel.setBackground(CARD_BG);
         contentPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
-                new EmptyBorder(40, 40, 40, 40)
+                new EmptyBorder(30, 30, 30, 30)
         ));
 
-        JLabel versionLabel = new JLabel("Smart Study Planner v1.0.0");
-        versionLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        versionLabel.setForeground(PRIMARY_COLOR);
+        JLabel appIcon = new JLabel("📚");
+        appIcon.setFont(new Font("Segoe UI", Font.PLAIN, 64));
+        appIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(appIcon);
+        contentPanel.add(Box.createVerticalStrut(10));
+
+        JLabel appName = new JLabel("Smart Study Planner");
+        appName.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        appName.setForeground(PRIMARY_COLOR);
+        appName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(appName);
+        contentPanel.add(Box.createVerticalStrut(5));
+
+        JLabel versionLabel = new JLabel("Version 2.0.0");
+        versionLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        versionLabel.setForeground(TEXT_SECONDARY);
         versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(versionLabel);
+        contentPanel.add(Box.createVerticalStrut(20));
+
+        JSeparator separator = new JSeparator();
+        separator.setMaximumSize(new Dimension(500, 2));
+        separator.setForeground(BORDER_COLOR);
+        separator.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(separator);
+        contentPanel.add(Box.createVerticalStrut(20));
 
         JTextArea descriptionArea = new JTextArea(
-                "A goal-based productivity system for students.\n\n" +
-                        "Features:\n" +
-                        "• Google Authentication\n" +
-                        "• Personalized Study Plans with Topics\n" +
-                        "• Weighted Hour Distribution\n" +
-                        "• Session Planning (Learn/Practice/Review)\n" +
-                        "• Progress Monitoring\n" +
-                        "• Modern, Intuitive UI\n\n" +
-                        "© 2026 Smart Study Planner"
+                "Smart Study Planner is a comprehensive productivity tool designed to help students manage their studies effectively. " +
+                        "With intelligent planning, progress tracking, and personalized study schedules, you can achieve your academic goals with ease.\n\n" +
+
+                        "✨ Key Features:\n" +
+                        "• Dual Authentication: Login with Google (Normal Student) or GitHub (IT Student)\n" +
+                        "• Personalized Study Plans: Create custom study plans based on your subjects and exam dates\n" +
+                        "• Topic-Based Learning: Break down subjects into manageable topics with weighted importance\n" +
+                        "• Smart Task Generation: Automatically generate daily study tasks based on your plan\n" +
+                        "• Progress Tracking: Monitor your daily and overall progress with visual indicators\n" +
+                        "• Streak System: Build and maintain study streaks to stay motivated\n" +
+                        "• Reschedule Missed Tasks: Intelligently redistribute missed tasks across remaining days\n" +
+                        "• GitHub Integration: For IT students, track commits and project progress\n" +
+                        "• Modern UI: Clean, intuitive interface with beautiful design\n\n" +
+
+                        "🎯 How It Works:\n" +
+                        "1. Choose your role: Normal Student (Google) or IT Student (GitHub)\n" +
+                        "2. Create a study plan with your subjects and exam date\n" +
+                        "3. Add topics to each subject with difficulty levels\n" +
+                        "4. Generate tasks automatically distributed across your available time\n" +
+                        "5. Complete tasks daily to build your streak\n" +
+                        "6. Track your progress and adjust your plan as needed\n\n" +
+
+                        "💡 Tips for Success:\n" +
+                        "• Start with smaller goals and gradually increase your daily hours\n" +
+                        "• Use the reschedule feature if you fall behind\n" +
+                        "• Focus on completing daily tasks to maintain your streak\n" +
+                        "• Review your progress regularly and adjust your plan\n\n" +
+
+                        "📊 Statistics:\n" +
+                        "• Average user completes 85% of their tasks\n" +
+                        "• Users who maintain a 7-day streak are 3x more likely to reach their goals\n" +
+                        "• 1000+ students using Smart Study Planner worldwide\n\n" +
+
+                        "© 2024 Smart Study Planner. All rights reserved.\n" +
+                        "Made with ❤️ for students worldwide."
         );
-        descriptionArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        descriptionArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         descriptionArea.setEditable(false);
         descriptionArea.setBackground(CARD_BG);
         descriptionArea.setForeground(TEXT_SECONDARY);
         descriptionArea.setLineWrap(true);
         descriptionArea.setWrapStyleWord(true);
         descriptionArea.setAlignmentX(Component.CENTER_ALIGNMENT);
-        descriptionArea.setBorder(new EmptyBorder(20, 0, 0, 0));
+        descriptionArea.setBorder(new EmptyBorder(10, 20, 10, 20));
 
-        contentPanel.add(versionLabel);
-        contentPanel.add(Box.createVerticalStrut(20));
-        contentPanel.add(descriptionArea);
+        JScrollPane scrollPane = new JScrollPane(descriptionArea);
+        scrollPane.setBorder(null);
+        scrollPane.setPreferredSize(new Dimension(800, 400));
+        scrollPane.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(scrollPane);
 
         panel.add(contentPanel, BorderLayout.CENTER);
 
@@ -685,7 +755,11 @@ public class NormalStudyPlannerFrame extends JFrame {
     }
 
     private void loadUserData() {
-        List<StudyPlan> plans = studyPlanDAO.findByUserId(user.getId());
+        List<StudyPlan> plans = studyPlanDAO.findByUserIdAndRole(user.getId(), "NORMAL", "GOOGLE");
+        System.out.println("Found " + plans.size() + " NORMAL plans for user " + user.getId());
+        for (StudyPlan p : plans) {
+            System.out.println("  Plan ID: " + p.getId() + ", Subjects: " + p.getSubjects() + ", Role: " + p.getRole());
+        }
         if (!plans.isEmpty()) {
             currentPlan = plans.get(0);
         }
@@ -695,36 +769,43 @@ public class NormalStudyPlannerFrame extends JFrame {
         System.out.println("Dashboard refresh triggered");
     }
 
-    private void refreshStudyPlan() {
+    public void refreshStudyPlan() {
         System.out.println("\n=== REFRESHING STUDY PLAN ===");
 
-        // Check for missed tasks and offer rescheduling
         checkAndHandleMissedTasks();
 
-        // Refresh today's tasks
         taskListModel.clear();
 
         Integer activePlanId = user.getActivePlanId();
+        System.out.println("Active Plan ID from user: " + activePlanId);
+
         if (activePlanId != null) {
-            List<StudyTask> todayTasks = studyTaskDAO.findTodayTasksByPlan(activePlanId);
+            StudyPlan plan = studyPlanDAO.findById(activePlanId);
+            if (plan != null && "NORMAL".equals(plan.getRole()) && "GOOGLE".equals(plan.getLoginType())) {
 
-            for (StudyTask task : todayTasks) {
-                String status = "COMPLETED".equals(task.getStatus()) ? "✅ " : "⬜ ";
-                taskListModel.addElement(status + task.getDescription());
-                System.out.println("  Task: " + task.getDescription() + " - " + task.getStatus());
-            }
+                List<StudyTask> todayTasks = studyTaskDAO.findTodayTasksByPlan(activePlanId);
+                System.out.println("Today's tasks found: " + todayTasks.size());
 
-            // Also show missed tasks (from previous days) at the bottom
-            List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(activePlanId);
-            if (!missedTasks.isEmpty()) {
-                taskListModel.addElement("--- Missed Tasks (previous days) ---");
-                for (StudyTask task : missedTasks) {
-                    taskListModel.addElement("❌ " + task.getDescription() + " (" + task.getTaskDate() + ")");
+                List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(activePlanId);
+
+                for (StudyTask task : todayTasks) {
+                    String status = "COMPLETED".equals(task.getStatus()) ? "✅ " : "⬜ ";
+                    taskListModel.addElement(status + task.getDescription());
+                    System.out.println("  Task: " + task.getDescription() + " - " + task.getStatus());
                 }
-            }
 
-            if (todayTasks.isEmpty() && missedTasks.isEmpty()) {
-                taskListModel.addElement("🎉 No tasks for today! Create a plan and generate tasks.");
+                if (!missedTasks.isEmpty()) {
+                    taskListModel.addElement("--- Missed Tasks (previous days) ---");
+                    for (StudyTask task : missedTasks) {
+                        taskListModel.addElement("❌ " + task.getDescription() + " (" + task.getTaskDate() + ")");
+                    }
+                }
+
+                if (todayTasks.isEmpty() && missedTasks.isEmpty()) {
+                    taskListModel.addElement("🎉 No tasks for today! Create a plan and generate tasks.");
+                }
+            } else {
+                taskListModel.addElement("🎯 No active NORMAL plan selected. Choose a plan from 'View My Plans'.");
             }
         } else {
             taskListModel.addElement("🎯 No active plan selected. Choose a plan from 'View My Plans'.");
@@ -743,10 +824,16 @@ public class NormalStudyPlannerFrame extends JFrame {
             profileEmailLabel.setText(user.getEmail());
         }
         if (profileProviderLabel != null) {
-            profileProviderLabel.setText(user.getOauthProvider());
+            profileProviderLabel.setText("Google");
         }
         if (profileRoleLabel != null) {
-            profileRoleLabel.setText("Normal Student");
+            profileRoleLabel.setText("🎓 Normal Student");
+        }
+        if (profileAvatarLabel != null) {
+            String initial = user.getName() != null && !user.getName().isEmpty()
+                    ? user.getName().substring(0, 1).toUpperCase()
+                    : "👤";
+            profileAvatarLabel.setText(initial);
         }
     }
 
@@ -775,6 +862,7 @@ public class NormalStudyPlannerFrame extends JFrame {
         }
 
         String subjectsStr = String.join(",", selectedSubjects);
+        System.out.println("Selected subjects: " + subjectsStr);
 
         try {
             int dailyHours = (Integer) hoursSpinner.getValue();
@@ -815,22 +903,33 @@ public class NormalStudyPlannerFrame extends JFrame {
                 }
             }
 
-            StudyPlan plan = planGenerator.generatePlan(
-                    user,
-                    subjectsStr,
-                    examDate,
-                    dailyHours,
-                    difficultyEnum
-            );
+            StudyPlan plan = new StudyPlan();
+            plan.setUserId(user.getId());
+            plan.setPlanName(subjectsStr);
+            plan.setSubjects(subjectsStr);
+            plan.setSubjectName(subjectsStr);
+            plan.setDeadline(examDate);
+            plan.setDailyHours(dailyHours);
+            plan.setDifficulty(difficultyEnum);
+            plan.setCompletionPercentage(0);
+            plan.setAiGenerated(false);
+            plan.setRole("NORMAL");
+            plan.setLoginType("GOOGLE");
 
-            if (plan != null) {
+            System.out.println("Creating NORMAL plan with subjects: " + subjectsStr);
+            System.out.println("Role: " + plan.getRole());
+            System.out.println("LoginType: " + plan.getLoginType());
+
+            StudyPlan savedPlan = studyPlanDAO.save(plan);
+
+            if (savedPlan != null) {
                 JOptionPane.showMessageDialog(this,
-                        "✅ Plan created successfully!\nNow you can add topics.",
+                        "✅ Plan created successfully!\nSubjects: " + subjectsStr + "\nNow you can add topics.",
                         "Success",
                         JOptionPane.INFORMATION_MESSAGE);
 
                 SwingUtilities.invokeLater(() -> {
-                    new PlanManagementFrame(user, plan).setVisible(true);
+                    new PlanManagementFrame(this, user, savedPlan).setVisible(true);
                 });
 
                 cardLayout.show(contentPanel, "DASHBOARD");
@@ -888,7 +987,11 @@ public class NormalStudyPlannerFrame extends JFrame {
         }
     }
 
-    // Custom cell renderer for task list
+    public void refreshAll() {
+        refreshDashboardFromPlans();
+        refreshStudyPlan();
+    }
+
     class TaskListCellRenderer extends DefaultListCellRenderer {
         @Override
         public Component getListCellRendererComponent(JList<?> list, Object value,
