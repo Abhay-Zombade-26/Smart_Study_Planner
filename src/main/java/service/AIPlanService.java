@@ -83,6 +83,8 @@ public class AIPlanService {
             plan.setDifficulty("AI_GENERATED");
             plan.setCompletionPercentage(0);
             plan.setAiGenerated(true);
+            plan.setRole("IT");           // Add this
+            plan.setLoginType("GITHUB");  // Add this
 
             plan = planDAO.save(plan);
 
