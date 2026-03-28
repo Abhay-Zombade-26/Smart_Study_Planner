@@ -33,6 +33,8 @@ public class NormalPlanGenerator implements PlanStrategyService {
 
         try {
             StudyPlan plan = new StudyPlan(user.getId(), subjects, deadline, difficulty, dailyHours);
+            plan.setRole("NORMAL");
+            plan.setLoginType("GOOGLE");
             plan = studyPlanDAO.save(plan);
             System.out.println("Plan saved to DB with ID: " + (plan != null ? plan.getId() : "null"));
 
@@ -50,45 +52,42 @@ public class NormalPlanGenerator implements PlanStrategyService {
         }
     }
 
-    /**
-     * Generates study tasks based on the topics associated with the plan.
-     * Called from PlanManagementFrame after topics are added.
-     */
     public List<StudyTask> generateTasksFromTopics(StudyPlan plan) {
         List<StudyTask> tasks = new ArrayList<>();
 
-        // Retrieve topics for this plan
         List<Topic> topics = topicDAO.findByPlanId(plan.getId());
         if (topics.isEmpty()) {
-            System.out.println("No topics found for plan " + plan.getId() + ". Cannot generate tasks.");
+            System.out.println("No topics found for plan " + plan.getId());
             return tasks;
         }
 
-        // Calculate weights for each topic
+        System.out.println("Found " + topics.size() + " topics for plan " + plan.getId());
+
         weightCalculator.calculateWeights(topics);
 
-        // Calculate total available study hours until deadline
         LocalDate today = LocalDate.now();
         long daysRemaining = ChronoUnit.DAYS.between(today, plan.getDeadline());
+
         if (daysRemaining <= 0) {
-            System.out.println("Deadline is in the past or today!");
+            System.out.println("Deadline passed!");
             return tasks;
         }
-        int totalHours = (int) (daysRemaining * plan.getDailyHours());
 
-        // Distribute hours proportionally to topic weights
+        int totalHours = (int) (daysRemaining * plan.getDailyHours());
+        System.out.println("Total hours: " + totalHours);
+
         Map<Integer, Double> hoursPerTopic = weightCalculator.distributeHours(topics, totalHours);
 
-        // For each topic, generate tasks spread across the available days
         for (Topic topic : topics) {
             double topicHours = hoursPerTopic.get(topic.getId());
-            // Convert hours to number of study sessions (assuming each session is 1 hour)
             int sessionCount = (int) Math.ceil(topicHours);
-            // Distribute sessions evenly across the days remaining
+            if (sessionCount <= 0) sessionCount = 1;
+
+            System.out.println("Topic: " + topic.getName() + " - Sessions: " + sessionCount);
+
             long interval = daysRemaining / sessionCount;
             if (interval < 1) interval = 1;
 
-            // Simple session type distribution: 30% Learn, 40% Practice, 30% Review
             int learnCount = (int) Math.ceil(sessionCount * 0.3);
             int practiceCount = (int) Math.ceil(sessionCount * 0.4);
             int reviewCount = sessionCount - learnCount - practiceCount;
@@ -111,7 +110,7 @@ public class NormalPlanGenerator implements PlanStrategyService {
                         plan.getId(),
                         taskDate,
                         description,
-                        false,           // requiredCommit false for normal mode
+                        false,
                         topic.getId(),
                         sessionType
                 );
@@ -121,13 +120,18 @@ public class NormalPlanGenerator implements PlanStrategyService {
         }
 
         System.out.println("Generated " + tasks.size() + " tasks from topics.");
+
+        // Save all tasks to database
+        if (!tasks.isEmpty()) {
+            studyTaskDAO.saveAll(tasks);
+            System.out.println("✅ Saved " + tasks.size() + " tasks to database");
+        }
+
         return tasks;
     }
 
-    // Legacy method – not used in new workflow, kept for compatibility
     @Override
     public List<StudyTask> generateTasks(StudyPlan plan) {
-        // This is the old simple rotation method; we return empty list as we use generateTasksFromTopics now.
         return new ArrayList<>();
     }
 
