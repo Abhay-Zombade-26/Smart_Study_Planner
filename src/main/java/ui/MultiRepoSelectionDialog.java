@@ -36,13 +36,11 @@ public class MultiRepoSelectionDialog extends JDialog {
     private JTextField planNameField;
     private JTextArea projectPromptArea;
 
-    // Input fields for each repository
     private List<JComboBox<String>> priorityCombos;
     private List<JTextArea> featureAreas;
     private List<JComboBox<String>> experienceCombos;
     private List<JCheckBox> checkBoxes;
 
-    // Color scheme
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
     private final Color SUCCESS_COLOR = new Color(16, 185, 129);
     private final Color DANGER_COLOR = new Color(239, 68, 68);
@@ -126,7 +124,6 @@ public class MultiRepoSelectionDialog extends JDialog {
                 new EmptyBorder(20, 20, 20, 20)
         ));
 
-        // User Project Idea Section
         JPanel ideaPanel = new JPanel(new BorderLayout());
         ideaPanel.setBackground(Color.WHITE);
         ideaPanel.setBorder(BorderFactory.createTitledBorder(
@@ -169,7 +166,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         panel.add(ideaPanel);
         panel.add(Box.createVerticalStrut(15));
 
-        // Repository Selection Header
         JPanel repoHeader = new JPanel(new GridLayout(1, 5, 10, 0));
         repoHeader.setBackground(Color.WHITE);
         repoHeader.setBorder(new EmptyBorder(10, 0, 10, 0));
@@ -182,7 +178,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         panel.add(repoHeader);
         panel.add(Box.createVerticalStrut(5));
 
-        // Repository rows
         for (Map<String, String> repo : repositories) {
             panel.add(createRepoRow(repo));
             panel.add(Box.createVerticalStrut(10));
@@ -246,7 +241,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         gbc.insets = new Insets(10, 10, 10, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Plan Name
         gbc.gridx = 0; gbc.gridy = 0;
         panel.add(new JLabel("Plan Name:"), gbc);
 
@@ -257,7 +251,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         planNameField.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
         panel.add(planNameField, gbc);
 
-        // Duration
         gbc.gridx = 0; gbc.gridy = 1;
         gbc.gridwidth = 1;
         panel.add(new JLabel("Study Duration:"), gbc);
@@ -268,7 +261,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         durationCombo.setPreferredSize(new Dimension(150, 35));
         panel.add(durationCombo, gbc);
 
-        // Daily Hours
         gbc.gridx = 2;
         panel.add(new JLabel("Daily Hours:"), gbc);
 
@@ -278,7 +270,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         hoursSpinner.setPreferredSize(new Dimension(100, 35));
         panel.add(hoursSpinner, gbc);
 
-        // AI Toggle
         gbc.gridx = 0; gbc.gridy = 2;
         gbc.gridwidth = 4;
         useAICheckbox = new JCheckBox("✨ Use AI Smart Plan (Recommended) - Converts your idea into executable tasks");
@@ -291,14 +282,12 @@ public class MultiRepoSelectionDialog extends JDialog {
         }
         panel.add(useAICheckbox, gbc);
 
-        // Status Label
         gbc.gridx = 0; gbc.gridy = 3;
         statusLabel = new JLabel(" ");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         statusLabel.setForeground(PRIMARY_COLOR);
         panel.add(statusLabel, gbc);
 
-        // Generate Button
         gbc.gridy = 4;
         gbc.gridwidth = 4;
         gbc.anchor = GridBagConstraints.CENTER;
@@ -369,7 +358,6 @@ public class MultiRepoSelectionDialog extends JDialog {
         statusLabel.setText("Generating your smart study plan...");
         statusLabel.setForeground(PRIMARY_COLOR);
 
-        // Progress dialog
         JDialog progressDialog = new JDialog(this, "Generating Plan", true);
         progressDialog.setLayout(new BorderLayout());
         progressDialog.setSize(550, 400);
@@ -407,7 +395,7 @@ public class MultiRepoSelectionDialog extends JDialog {
 
         progressDialog.add(progressPanel);
 
-        SwingWorker<Void, String> worker = new SwingWorker<>() {
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
             @Override
             protected Void doInBackground() throws Exception {
                 try {
@@ -436,6 +424,10 @@ public class MultiRepoSelectionDialog extends JDialog {
                         StudyPlan plan = aiPlanService.generatePlanFromIdea(user, analysis, endDate, dailyHours, projectIdea);
 
                         if (plan != null) {
+                            plan.setRole("IT");
+                            plan.setLoginType("GITHUB");
+                            planDAO.update(plan);
+
                             publish("✅ Plan created successfully! ID: " + plan.getId());
                             publish("📁 File structure created based on your idea");
                             publish("📝 Daily tasks generated for " + durationMonths + " months");
@@ -445,12 +437,12 @@ public class MultiRepoSelectionDialog extends JDialog {
                         } else {
                             publish("⚠️ AI plan failed, using manual fallback...");
                             fallbackManualPlan(selectedRepos, priorities, features, experienceLevels,
-                                    durationMonths, dailyHours);
+                                    durationMonths, dailyHours, planName);
                         }
                     } else {
                         publish("📝 Using manual plan generation...");
                         fallbackManualPlan(selectedRepos, priorities, features, experienceLevels,
-                                durationMonths, dailyHours);
+                                durationMonths, dailyHours, planName);
                     }
 
                     publish("✅ All plans generated successfully!");
@@ -468,9 +460,29 @@ public class MultiRepoSelectionDialog extends JDialog {
 
             private void fallbackManualPlan(List<String> repos, List<String> priorities,
                                             List<String> features, List<String> experienceLevels,
-                                            int durationMonths, int dailyHours) {
-                planGenerator.generatePlan(user, repos, priorities, features,
-                        durationMonths, dailyHours, experienceLevels);
+                                            int durationMonths, int dailyHours, String planName) {
+                try {
+                    planGenerator.generatePlan(user, repos, priorities, features,
+                            durationMonths, dailyHours, experienceLevels);
+
+                    List<StudyPlan> plans = planDAO.findByUserIdAndRole(user.getId(), "IT", "GITHUB");
+                    if (!plans.isEmpty()) {
+                        StudyPlan plan = plans.get(0);
+                        plan.setPlanName(planName);
+                        plan.setRole("IT");
+                        plan.setLoginType("GITHUB");
+                        planDAO.update(plan);
+
+                        userDAO.updateActivePlan(user.getId(), plan.getId());
+                        user.setActivePlanId(plan.getId());
+                        publish("✅ Manual plan created successfully!");
+                    } else {
+                        publish("❌ Failed to create manual plan");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    publish("❌ Error creating manual plan: " + e.getMessage());
+                }
             }
 
             @Override
