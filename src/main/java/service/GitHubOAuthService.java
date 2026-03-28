@@ -22,11 +22,12 @@ import java.io.InputStream;
 import java.util.Properties;
 
 public class GitHubOAuthService {
-    
+
     private static String CLIENT_ID;
     private static String CLIENT_SECRET;
+    // REVERTED: Back to /callback (same as Google)
     private static final String REDIRECT_URI = "http://localhost:8888/callback";
-    
+
     static {
         try {
             Properties props = new Properties();
@@ -34,38 +35,44 @@ public class GitHubOAuthService {
                 props.load(input);
                 CLIENT_ID = props.getProperty("github.client.id");
                 CLIENT_SECRET = props.getProperty("github.client.secret");
-                System.out.println("? GitHubOAuthService initialized with Client ID: " + CLIENT_ID);
+                System.out.println("✅ GitHubOAuthService initialized with Client ID: " + CLIENT_ID);
+                System.out.println("✅ Using redirect URI: " + REDIRECT_URI);
             }
         } catch (Exception e) {
-            System.err.println("? Failed to load config: " + e.getMessage());
+            System.err.println("❌ Failed to load config: " + e.getMessage());
         }
     }
-    
+
     public String getAuthorizationUrl() {
-        String url = "https://github.com/login/oauth/authorize?" +
-                "client_id=" + CLIENT_ID +
-                "&redirect_uri=" + REDIRECT_URI +
-                "&scope=repo,user" +
-                "&response_type=code";
-        System.out.println("?? Auth URL: " + url);
-        return url;
+        try {
+            String url = "https://github.com/login/oauth/authorize?" +
+                    "client_id=" + CLIENT_ID +
+                    "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI, "UTF-8") +
+                    "&scope=" + URLEncoder.encode("repo user", "UTF-8") +
+                    "&response_type=code";
+            System.out.println("🔗 GitHub Auth URL: " + url);
+            return url;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
-    
+
     public User authenticate(String code) {
         try {
             System.out.println("1. Getting access token...");
             String accessToken = getAccessToken(code);
             System.out.println("2. Got access token");
-            
+
             System.out.println("3. Getting user info...");
             JSONObject userJson = getUserInfo(accessToken);
             String login = userJson.getString("login");
             System.out.println("4. GitHub username: " + login);
-            
+
             System.out.println("5. Getting email...");
             String email = getUserEmail(accessToken);
             System.out.println("6. Email: " + email);
-            
+
             User user = new User();
             user.setName(userJson.optString("name", login));
             user.setEmail(email);
@@ -74,21 +81,21 @@ public class GitHubOAuthService {
             user.setGithubUsername(login);
             user.setAccessToken(accessToken);
             user.setAvatarUrl(userJson.optString("avatar_url"));
-            
+
             System.out.println("7. Saving user to database...");
             UserDAO userDAO = new UserDAO();
             User savedUser = userDAO.save(user);
             System.out.println("8. User saved with ID: " + (savedUser != null ? savedUser.getId() : "null"));
-            
+
             return savedUser;
-            
+
         } catch (Exception e) {
-            System.err.println("? Authentication error: " + e.getMessage());
+            System.err.println("❌ Authentication error: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
     }
-    
+
     private String getAccessToken(String code) throws Exception {
         URL url = new URL("https://github.com/login/oauth/access_token");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -96,21 +103,21 @@ public class GitHubOAuthService {
         conn.setRequestProperty("Accept", "application/json");
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
         conn.setDoOutput(true);
-        
+
         String body = "client_id=" + URLEncoder.encode(CLIENT_ID, "UTF-8") +
                 "&client_secret=" + URLEncoder.encode(CLIENT_SECRET, "UTF-8") +
                 "&code=" + URLEncoder.encode(code, "UTF-8") +
                 "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI, "UTF-8");
-        
+
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.getBytes(StandardCharsets.UTF_8));
         }
-        
+
         int responseCode = conn.getResponseCode();
         if (responseCode != 200) {
             throw new Exception("Token exchange failed: " + responseCode);
         }
-        
+
         BufferedReader reader = new BufferedReader(
                 new InputStreamReader(conn.getInputStream()));
         StringBuilder response = new StringBuilder();
@@ -119,22 +126,27 @@ public class GitHubOAuthService {
             response.append(line);
         }
         reader.close();
-        
-        return new JSONObject(response.toString()).getString("access_token");
+
+        JSONObject json = new JSONObject(response.toString());
+        if (json.has("error")) {
+            throw new Exception("GitHub error: " + json.getString("error"));
+        }
+
+        return json.getString("access_token");
     }
-    
+
     private JSONObject getUserInfo(String accessToken) throws Exception {
         URL url = new URL("https://api.github.com/user");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty("Authorization", "token " + accessToken);
         conn.setRequestProperty("Accept", "application/json");
-        
+
         int responseCode = conn.getResponseCode();
         if (responseCode != 200) {
             throw new Exception("Failed to get user info: " + responseCode);
         }
-        
+
         BufferedReader reader = new BufferedReader(
                 new InputStreamReader(conn.getInputStream()));
         StringBuilder response = new StringBuilder();
@@ -143,22 +155,22 @@ public class GitHubOAuthService {
             response.append(line);
         }
         reader.close();
-        
+
         return new JSONObject(response.toString());
     }
-    
+
     private String getUserEmail(String accessToken) throws Exception {
         URL url = new URL("https://api.github.com/user/emails");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty("Authorization", "token " + accessToken);
         conn.setRequestProperty("Accept", "application/json");
-        
+
         int responseCode = conn.getResponseCode();
         if (responseCode != 200) {
             return "github-user@users.noreply.github.com";
         }
-        
+
         BufferedReader reader = new BufferedReader(
                 new InputStreamReader(conn.getInputStream()));
         StringBuilder response = new StringBuilder();
@@ -167,7 +179,7 @@ public class GitHubOAuthService {
             response.append(line);
         }
         reader.close();
-        
+
         JSONArray emails = new JSONArray(response.toString());
         for (int i = 0; i < emails.length(); i++) {
             JSONObject emailObj = emails.getJSONObject(i);
@@ -177,7 +189,7 @@ public class GitHubOAuthService {
         }
         return "github-user@users.noreply.github.com";
     }
-    
+
     public List<Map<String, String>> getRepositories(String accessToken) {
         List<Map<String, String>> repos = new ArrayList<>();
         try {
@@ -186,13 +198,13 @@ public class GitHubOAuthService {
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Authorization", "token " + accessToken);
             conn.setRequestProperty("Accept", "application/json");
-            
+
             int responseCode = conn.getResponseCode();
             if (responseCode != 200) {
                 System.err.println("Failed to get repos: " + responseCode);
                 return repos;
             }
-            
+
             BufferedReader reader = new BufferedReader(
                     new InputStreamReader(conn.getInputStream()));
             StringBuilder response = new StringBuilder();
@@ -201,7 +213,7 @@ public class GitHubOAuthService {
                 response.append(line);
             }
             reader.close();
-            
+
             JSONArray reposArray = new JSONArray(response.toString());
             for (int i = 0; i < reposArray.length(); i++) {
                 JSONObject repo = reposArray.getJSONObject(i);
@@ -213,8 +225,8 @@ public class GitHubOAuthService {
                 repoInfo.put("description", repo.optString("description", "No description"));
                 repos.add(repoInfo);
             }
-            System.out.println("?? Loaded " + repos.size() + " repositories");
-            
+            System.out.println("📦 Loaded " + repos.size() + " repositories");
+
         } catch (Exception e) {
             System.err.println("Error fetching repos: " + e.getMessage());
         }

@@ -2,95 +2,60 @@ package model;
 
 import java.time.LocalDate;
 
-public class DailyTask {
-    private int id;
-    private int userId;
-    private int goalId;
-    private String repositoryName;
-    private LocalDate taskDate;
-    private int plannedHours;
-    private int actualHours;
-    private int plannedCommits;
-    private int actualCommits;
-    private String status; // PENDING, COMPLETED, MISSED, ADJUSTED
-    private String description;
-    private LocalDate createdAt;
-    
-    public DailyTask() {}
-    
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    
-    public int getUserId() { return userId; }
-    public void setUserId(int userId) { this.userId = userId; }
-    
-    public int getGoalId() { return goalId; }
-    public void setGoalId(int goalId) { this.goalId = goalId; }
-    
-    public String getRepositoryName() { return repositoryName; }
-    public void setRepositoryName(String repositoryName) { this.repositoryName = repositoryName; }
-    
-    public LocalDate getTaskDate() { return taskDate; }
-    public void setTaskDate(LocalDate taskDate) { this.taskDate = taskDate; }
-    
-    public int getPlannedHours() { return plannedHours; }
-    public void setPlannedHours(int plannedHours) { this.plannedHours = plannedHours; }
-    
-    public int getActualHours() { return actualHours; }
-    public void setActualHours(int actualHours) { this.actualHours = actualHours; }
-    
-    public int getPlannedCommits() { return plannedCommits; }
-    public void setPlannedCommits(int plannedCommits) { this.plannedCommits = plannedCommits; }
-    
-    public int getActualCommits() { return actualCommits; }
-    public void setActualCommits(int actualCommits) { this.actualCommits = actualCommits; }
-    
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
-    
-    public LocalDate getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDate createdAt) { this.createdAt = createdAt; }
-    
-    public boolean isCompleted() {
-        return "COMPLETED".equals(status);
+// This class exists only for backward compatibility with GitHub code
+// It will be removed once all GitHub code is migrated to StudyTask
+public class DailyTask extends StudyTask {
+
+    public DailyTask() {
+        super();
     }
-    
-    public boolean isMissed() {
-        return "MISSED".equals(status);
+
+    // Helper methods for GitHub code
+    public void setUserId(int userId) {
+        super.setUserId(userId);
     }
-    
-    public boolean isPending() {
-        return "PENDING".equals(status);
+
+    public int getUserId() {
+        return super.getUserId();
     }
-    
-    public String getStatusEmoji() {
-        if (isCompleted()) return "?";
-        if (isMissed()) return "?";
-        if (isPending()) {
-            if (taskDate.isBefore(LocalDate.now())) return "??"; // Overdue
-            if (taskDate.equals(LocalDate.now())) return "?"; // Today
-            return "??"; // Future
-        }
-        return "?";
+
+    public void setRepositoryName(String repoName) {
+        super.setRepositoryName(repoName);
     }
-    
-    public String getStatusColor() {
-        if (isCompleted()) return "GREEN";
-        if (isMissed()) return "RED";
-        if (isPending()) {
-            if (taskDate.isBefore(LocalDate.now())) return "ORANGE";
-            if (taskDate.equals(LocalDate.now())) return "BLUE";
-            return "GRAY";
-        }
-        return "GRAY";
+
+    public String getRepositoryName() {
+        return super.getRepositoryName();
     }
-    
-    @Override
-    public String toString() {
-        return String.format("DailyTask{id=%d, repo=%s, date=%s, status=%s, commits=%d/%d}", 
-            id, repositoryName, taskDate, status, actualCommits, plannedCommits);
+
+    public void setPlannedHours(int hours) {
+        super.setPlannedHours(hours);
+    }
+
+    public int getPlannedHours() {
+        return super.getPlannedHours();
+    }
+
+    public void setActualHours(int hours) {
+        super.setActualHours(hours);
+    }
+
+    public int getActualHours() {
+        return super.getActualHours();
+    }
+
+    public void setPlannedCommits(int commits) {
+        super.setPlannedCommits(commits);
+    }
+
+    public int getPlannedCommits() {
+        return super.getPlannedCommits();
+    }
+
+    public void setActualCommits(int commits) {
+        super.setActualCommits(commits);
+    }
+
+    public int getActualCommits() {
+        return super.getActualCommits();
     }
 }

@@ -51,7 +51,7 @@
             <artifactId>flatlaf</artifactId>
             <version>3.4</version>
         </dependency>
-        
+
         <!-- FlatLaf Extras - For SVG icons -->
         <dependency>
             <groupId>com.formdev</groupId>
@@ -95,6 +95,19 @@
             <version>1.1.4</version>
         </dependency>
 
+        <!-- JFreeChart for Visualizations -->
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.5.3</version>
+        </dependency>
+
+        <!-- JCommon (required by JFreeChart) -->
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jcommon</artifactId>
+            <version>1.0.24</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -114,7 +127,7 @@
                     <target>17</target>
                 </configuration>
             </plugin>
-            
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
