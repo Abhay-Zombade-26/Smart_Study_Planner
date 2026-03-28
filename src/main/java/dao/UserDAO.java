@@ -176,6 +176,10 @@ public class UserDAO {
         return null;
     }
 
+    // Add this method to UserDAO.java (after findById method)
+    public User saveOrUpdate(User user) {
+        return save(user); // Your save method already handles update via ON DUPLICATE KEY
+    }
     public int getUserIdByEmail(String email) {
         String sql = "SELECT id FROM users WHERE email = ?";
         Connection conn = null;
