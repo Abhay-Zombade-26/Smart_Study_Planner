@@ -4,50 +4,36 @@ import java.time.LocalDate;
 
 public class StudyTask {
     private int id;
-    private int goalId;           // Google flow
-    private int userId;            // GitHub flow
-    private String repositoryName; // GitHub flow
+    private int goalId;
+    private int userId;
+    private String repositoryName;
     private LocalDate taskDate;
+    private int plannedHours;
+    private int actualHours;
+    private int plannedCommits;
+    private int actualCommits;
     private String description;
     private boolean requiredCommit;
-    private String status; // PENDING, COMPLETED, MISSED
-    private int plannedHours;      // GitHub flow
-    private int actualHours;       // GitHub flow
-    private int plannedCommits;    // GitHub flow
-    private int actualCommits;     // GitHub flow
-    private int topicId;           // Google flow
-    private String sessionType;    // Google flow
-    private String expectedFiles;  // NEW FIELD: Files expected to be modified for this task
+    private String status;
+    private int topicId;
+    private String sessionType;
+    private String expectedFiles;  // Add this field for GitHub/AI feature
 
     public StudyTask() {}
 
-    // Constructor for GitHub flow
-    public StudyTask(int userId, String repositoryName, LocalDate taskDate,
-                     String description, int plannedHours, int plannedCommits) {
-        this.userId = userId;
-        this.repositoryName = repositoryName;
-        this.taskDate = taskDate;
-        this.description = description;
-        this.plannedHours = plannedHours;
-        this.plannedCommits = plannedCommits;
-        this.requiredCommit = true;
-        this.status = "PENDING";
-        this.actualHours = 0;
-        this.actualCommits = 0;
-        this.expectedFiles = "";
-    }
-
-    // Constructor for Google flow
-    public StudyTask(int goalId, LocalDate taskDate, String description,
-                     boolean requiredCommit, int topicId, String sessionType) {
+    public StudyTask(int goalId, LocalDate taskDate, String description, boolean requiredCommit) {
         this.goalId = goalId;
         this.taskDate = taskDate;
         this.description = description;
         this.requiredCommit = requiredCommit;
+        this.status = "PENDING";
+    }
+
+    public StudyTask(int goalId, LocalDate taskDate, String description, boolean requiredCommit,
+                     int topicId, String sessionType) {
+        this(goalId, taskDate, description, requiredCommit);
         this.topicId = topicId;
         this.sessionType = sessionType;
-        this.status = "PENDING";
-        this.expectedFiles = "";
     }
 
     // Getters and Setters
@@ -66,15 +52,6 @@ public class StudyTask {
     public LocalDate getTaskDate() { return taskDate; }
     public void setTaskDate(LocalDate taskDate) { this.taskDate = taskDate; }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
-
-    public boolean isRequiredCommit() { return requiredCommit; }
-    public void setRequiredCommit(boolean requiredCommit) { this.requiredCommit = requiredCommit; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
     public int getPlannedHours() { return plannedHours; }
     public void setPlannedHours(int plannedHours) { this.plannedHours = plannedHours; }
 
@@ -87,21 +64,25 @@ public class StudyTask {
     public int getActualCommits() { return actualCommits; }
     public void setActualCommits(int actualCommits) { this.actualCommits = actualCommits; }
 
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public boolean isRequiredCommit() { return requiredCommit; }
+    public void setRequiredCommit(boolean requiredCommit) { this.requiredCommit = requiredCommit; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
     public int getTopicId() { return topicId; }
     public void setTopicId(int topicId) { this.topicId = topicId; }
 
     public String getSessionType() { return sessionType; }
     public void setSessionType(String sessionType) { this.sessionType = sessionType; }
 
-    // NEW GETTER AND SETTER
     public String getExpectedFiles() { return expectedFiles; }
     public void setExpectedFiles(String expectedFiles) { this.expectedFiles = expectedFiles; }
 
     public boolean isCompleted() {
         return "COMPLETED".equals(status);
-    }
-
-    public boolean isMissed() {
-        return "MISSED".equals(status);
     }
 }
