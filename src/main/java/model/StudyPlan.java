@@ -5,10 +5,10 @@ import java.time.LocalDate;
 public class StudyPlan {
     private int id;
     private int userId;
-    private String planName;           // User-defined plan name
-    private String repositoryName;      // GitHub flow (can be comma-separated for multiple repos)
-    private String subjectName;         // Google flow (single subject - legacy)
-    private String subjects;            // Google flow (multiple subjects)
+    private String planName;
+    private String repositoryName;
+    private String subjectName;
+    private String subjects;
     private LocalDate deadline;
     private int dailyHours;
     private String difficulty;
@@ -16,10 +16,13 @@ public class StudyPlan {
     private String status;
     private int completionPercentage;
     private boolean aiGenerated;
+    private String userRole;
+    private String role;
+    private String loginType;
 
     public StudyPlan() {}
 
-    // Constructor for GitHub flow with plan name and multiple repositories
+    // Constructor for GitHub flow (IT Student)
     public StudyPlan(int userId, String planName, String repositoryNames, LocalDate deadline,
                      String difficulty, int dailyHours) {
         this.userId = userId;
@@ -29,23 +32,13 @@ public class StudyPlan {
         this.difficulty = difficulty;
         this.dailyHours = dailyHours;
         this.completionPercentage = 0;
-        this.aiGenerated = false;
+        this.aiGenerated = true;
+        this.userRole = "IT";
+        this.role = "IT";
+        this.loginType = "GITHUB";
     }
 
-    // Constructor for GitHub flow (legacy - single repository)
-    public StudyPlan(int userId, String repositoryName, LocalDate deadline,
-                     String difficulty, int dailyHours) {
-        this.userId = userId;
-        this.repositoryName = repositoryName;
-        this.planName = repositoryName;
-        this.deadline = deadline;
-        this.difficulty = difficulty;
-        this.dailyHours = dailyHours;
-        this.completionPercentage = 0;
-        this.aiGenerated = false;
-    }
-
-    // Constructor for Google flow with plan name
+    // Constructor for Google flow (Normal Student)
     public StudyPlan(int userId, String planName, LocalDate deadline, String subjects,
                      String difficulty, int dailyHours) {
         this.userId = userId;
@@ -56,9 +49,27 @@ public class StudyPlan {
         this.dailyHours = dailyHours;
         this.completionPercentage = 0;
         this.aiGenerated = false;
+        this.userRole = "NORMAL";
+        this.role = "NORMAL";
+        this.loginType = "GOOGLE";
     }
 
-    // Constructor for Google flow (legacy - without plan name)
+    // Legacy constructor
+    public StudyPlan(int userId, String repositoryName, LocalDate deadline,
+                     String difficulty, int dailyHours) {
+        this.userId = userId;
+        this.repositoryName = repositoryName;
+        this.planName = repositoryName;
+        this.deadline = deadline;
+        this.difficulty = difficulty;
+        this.dailyHours = dailyHours;
+        this.completionPercentage = 0;
+        this.aiGenerated = false;
+        this.userRole = "IT";
+        this.role = "IT";
+        this.loginType = "GITHUB";
+    }
+
     public StudyPlan(int userId, LocalDate deadline, String subjects,
                      String difficulty, int dailyHours) {
         this.userId = userId;
@@ -69,6 +80,9 @@ public class StudyPlan {
         this.dailyHours = dailyHours;
         this.completionPercentage = 0;
         this.aiGenerated = false;
+        this.userRole = "NORMAL";
+        this.role = "NORMAL";
+        this.loginType = "GOOGLE";
     }
 
     // Getters and Setters
@@ -110,4 +124,24 @@ public class StudyPlan {
 
     public boolean isAiGenerated() { return aiGenerated; }
     public void setAiGenerated(boolean aiGenerated) { this.aiGenerated = aiGenerated; }
+
+    public String getUserRole() { return userRole; }
+    public void setUserRole(String userRole) { this.userRole = userRole; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+
+    public String getLoginType() { return loginType; }
+    public void setLoginType(String loginType) { this.loginType = loginType; }
+
+    @Override
+    public String toString() {
+        return "StudyPlan{" +
+                "id=" + id +
+                ", userId=" + userId +
+                ", planName='" + planName + '\'' +
+                ", role='" + role + '\'' +
+                ", loginType='" + loginType + '\'' +
+                '}';
+    }
 }
