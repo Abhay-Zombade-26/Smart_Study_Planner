@@ -7,34 +7,37 @@ import model.Topic;
 import dao.StudyPlanDAO;
 import dao.StudyTaskDAO;
 import dao.TopicDAO;
+import dao.UserDAO;
 import service.NormalPlanGenerator;
 import service.TopicWeightCalculator;
+import service.PlanRescheduler;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Date;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.stream.Collectors;
 
-public class PlanManagementFrame extends JFrame {
+public class PlanManagementFrame extends JDialog {
 
     private User user;
     private StudyPlan plan;
+    private NormalStudyPlannerFrame parentFrame;
     private StudyPlanDAO studyPlanDAO;
     private StudyTaskDAO studyTaskDAO;
     private TopicDAO topicDAO;
+    private UserDAO userDAO;
     private NormalPlanGenerator planGenerator;
     private TopicWeightCalculator weightCalculator;
 
-    // UI Components
     private JLabel planIdLabel;
     private JLabel subjectsLabel;
     private JSpinner dateSpinner;
@@ -45,63 +48,63 @@ public class PlanManagementFrame extends JFrame {
     private JLabel statsLabel;
     private DefaultListModel<String> topicListModel;
     private JList<String> topicList;
+    private JLabel missedTasksLabel;
 
-    // Store task IDs in the same order as table rows
-    private List<Integer> taskIdList;
-
-    // Colors
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
     private final Color SUCCESS_COLOR = new Color(34, 197, 94);
     private final Color DANGER_COLOR = new Color(239, 68, 68);
+    private final Color WARNING_COLOR = new Color(245, 158, 11);
     private final Color CARD_BG = Color.WHITE;
     private final Color TEXT_PRIMARY = new Color(17, 24, 39);
     private final Color BORDER_COLOR = new Color(229, 231, 235);
 
     public PlanManagementFrame(User user, StudyPlan plan) {
+        this(null, user, plan);
+    }
+
+    public PlanManagementFrame(NormalStudyPlannerFrame parent, User user, StudyPlan plan) {
+        super(parent, "Manage Study Plan - ID: " + plan.getId(), true);
         this.user = user;
         this.plan = plan;
+        this.parentFrame = parent;
         this.studyPlanDAO = new StudyPlanDAO();
         this.studyTaskDAO = new StudyTaskDAO();
         this.topicDAO = new TopicDAO();
+        this.userDAO = new UserDAO();
         this.planGenerator = new NormalPlanGenerator();
         this.weightCalculator = new TopicWeightCalculator();
-        this.taskIdList = new ArrayList<>();
 
         initUI();
         loadPlanData();
         loadTopics();
         loadTasks();
+        checkMissedTasks();
+
+        setSize(1000, 750);
+        setLocationRelativeTo(parent);
+        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
     }
 
     private void initUI() {
-        setTitle("Manage Study Plan - ID: " + plan.getId());
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(1000, 700);
-        setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
         mainPanel.setBackground(CARD_BG);
 
-        // Top Panel - Plan Info & Controls
         JPanel topPanel = createTopPanel();
 
-        // Center Panel - Split: Topics (left) and Tasks (right)
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setResizeWeight(0.4);
         splitPane.setBorder(null);
         splitPane.setBackground(CARD_BG);
 
-        // Left: Topics panel
         JPanel topicsPanel = createTopicsPanel();
-        // Right: Tasks panel
         JPanel tasksPanel = createTasksPanel();
 
         splitPane.setLeftComponent(topicsPanel);
         splitPane.setRightComponent(tasksPanel);
 
-        // Bottom Panel - Action Buttons
         JPanel bottomPanel = createBottomPanel();
 
         mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -123,7 +126,6 @@ public class PlanManagementFrame extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 8, 8, 8);
 
-        // Plan ID
         gbc.gridx = 0; gbc.gridy = 0;
         panel.add(new JLabel("Plan ID:"), gbc);
         gbc.gridx = 1;
@@ -131,7 +133,6 @@ public class PlanManagementFrame extends JFrame {
         planIdLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         panel.add(planIdLabel, gbc);
 
-        // Subjects
         gbc.gridx = 0; gbc.gridy = 1;
         panel.add(new JLabel("Subjects:"), gbc);
         gbc.gridx = 1;
@@ -139,7 +140,6 @@ public class PlanManagementFrame extends JFrame {
         subjectsLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         panel.add(subjectsLabel, gbc);
 
-        // Exam Date
         gbc.gridx = 0; gbc.gridy = 2;
         panel.add(new JLabel("Exam Date:"), gbc);
         gbc.gridx = 1;
@@ -149,7 +149,6 @@ public class PlanManagementFrame extends JFrame {
         dateSpinner.setPreferredSize(new Dimension(150, 30));
         panel.add(dateSpinner, gbc);
 
-        // Hours per Day
         gbc.gridx = 0; gbc.gridy = 3;
         panel.add(new JLabel("Hours per Day:"), gbc);
         gbc.gridx = 1;
@@ -158,7 +157,6 @@ public class PlanManagementFrame extends JFrame {
         hoursSpinner.setPreferredSize(new Dimension(100, 30));
         panel.add(hoursSpinner, gbc);
 
-        // Difficulty
         gbc.gridx = 0; gbc.gridy = 4;
         panel.add(new JLabel("Difficulty:"), gbc);
         gbc.gridx = 1;
@@ -167,7 +165,6 @@ public class PlanManagementFrame extends JFrame {
         difficultyCombo.setPreferredSize(new Dimension(120, 30));
         panel.add(difficultyCombo, gbc);
 
-        // Stats
         gbc.gridx = 0; gbc.gridy = 5;
         panel.add(new JLabel("Progress:"), gbc);
         gbc.gridx = 1;
@@ -175,6 +172,14 @@ public class PlanManagementFrame extends JFrame {
         statsLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         statsLabel.setForeground(PRIMARY_COLOR);
         panel.add(statsLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 6;
+        panel.add(new JLabel("Missed Tasks:"), gbc);
+        gbc.gridx = 1;
+        missedTasksLabel = new JLabel("0");
+        missedTasksLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        missedTasksLabel.setForeground(DANGER_COLOR);
+        panel.add(missedTasksLabel, gbc);
 
         return panel;
     }
@@ -249,18 +254,6 @@ public class PlanManagementFrame extends JFrame {
             tasksTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
 
-        // Add double-click listener to toggle task status
-        tasksTable.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    int row = tasksTable.getSelectedRow();
-                    if (row >= 0 && row < taskIdList.size()) {
-                        toggleTaskStatus(row);
-                    }
-                }
-            }
-        });
-
         JScrollPane scrollPane = new JScrollPane(tasksTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
         scrollPane.setPreferredSize(new Dimension(400, 300));
@@ -284,10 +277,15 @@ public class PlanManagementFrame extends JFrame {
         JButton deletePlanBtn = createStyledButton("Delete Plan", DANGER_COLOR);
         deletePlanBtn.addActionListener(e -> deletePlan());
 
+        JButton rescheduleBtn = createStyledButton("🔄 Reschedule Missed", WARNING_COLOR);
+        rescheduleBtn.addActionListener(e -> rescheduleMissedTasks());
+        rescheduleBtn.setToolTipText("Distribute missed tasks across remaining days");
+
         JButton refreshBtn = createStyledButton("Refresh", PRIMARY_COLOR);
         refreshBtn.addActionListener(e -> {
             loadTopics();
             loadTasks();
+            checkMissedTasks();
         });
 
         JButton closeBtn = createStyledButton("Close", new Color(100, 116, 139));
@@ -296,6 +294,7 @@ public class PlanManagementFrame extends JFrame {
         panel.add(generateTasksBtn);
         panel.add(updatePlanBtn);
         panel.add(deletePlanBtn);
+        panel.add(rescheduleBtn);
         panel.add(refreshBtn);
         panel.add(closeBtn);
 
@@ -310,7 +309,7 @@ public class PlanManagementFrame extends JFrame {
         button.setBorderPainted(false);
         button.setFocusPainted(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.setPreferredSize(new Dimension(120, 35));
+        button.setPreferredSize(new Dimension(140, 35));
         return button;
     }
 
@@ -340,70 +339,210 @@ public class PlanManagementFrame extends JFrame {
 
     private void loadTasks() {
         tableModel.setRowCount(0);
-        taskIdList.clear();
+
+        plan = studyPlanDAO.findById(plan.getId());
+        if (plan == null) {
+            System.err.println("Plan not found!");
+            return;
+        }
+
         List<StudyTask> tasks = studyTaskDAO.findByGoalId(plan.getId());
         int completed = 0;
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
-        for (StudyTask task : tasks) {
-            taskIdList.add(task.getId());
-            String status;
-            if ("COMPLETED".equals(task.getStatus())) {
-                status = "✅ Completed";
-                completed++;
-            } else if ("MISSED".equals(task.getStatus())) {
-                status = "❌ Missed";
-            } else {
-                status = "⏳ Pending";
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+
+        System.out.println("=== LOADING TASKS ===");
+        System.out.println("Plan ID: " + plan.getId());
+        System.out.println("Found " + tasks.size() + " tasks for plan " + plan.getId());
+
+        if (tasks.isEmpty()) {
+            tableModel.addRow(new Object[]{"-", "No tasks generated yet. Click 'Generate Tasks' after adding topics.", "-"});
+            System.out.println("No tasks found!");
+        } else {
+            for (StudyTask task : tasks) {
+                String status;
+                if ("COMPLETED".equals(task.getStatus())) {
+                    status = "✅ Completed";
+                    completed++;
+                } else if (task.getTaskDate().isBefore(today) && !"COMPLETED".equals(task.getStatus())) {
+                    status = "❌ Missed";
+                } else {
+                    status = "⏳ Pending";
+                }
+
+                System.out.println("  Task: " + task.getTaskDate() + " - " + task.getDescription());
+
+                tableModel.addRow(new Object[]{
+                        task.getTaskDate().format(fmt),
+                        task.getDescription(),
+                        status
+                });
             }
-            tableModel.addRow(new Object[]{
-                    task.getTaskDate().format(fmt),
-                    task.getDescription(),
-                    status
-            });
         }
+
         int total = tasks.size();
         int progress = total > 0 ? (completed * 100 / total) : 0;
         statsLabel.setText(completed + "/" + total + " (" + progress + "%)");
+        System.out.println("Total tasks: " + total + ", Completed: " + completed);
+        System.out.println("=========================");
     }
 
-    private void toggleTaskStatus(int row) {
-        int taskId = taskIdList.get(row);
-        // Get current status from database (or from table, but safer to refetch)
-        List<StudyTask> tasks = studyTaskDAO.findByGoalId(plan.getId());
-        StudyTask task = tasks.stream().filter(t -> t.getId() == taskId).findFirst().orElse(null);
-        if (task == null) return;
+    private void generateTasks() {
+        List<Topic> topics = topicDAO.findByPlanId(plan.getId());
+        if (topics.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please add topics first.", "No Topics", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-        String newStatus = "COMPLETED".equals(task.getStatus()) ? "PENDING" : "COMPLETED";
-        studyTaskDAO.updateStatus(taskId, newStatus);
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "This will replace all pending tasks. Completed tasks will be preserved.\nContinue?",
+                "Confirm", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
 
-        // Reload tasks to reflect change
+        // Get existing tasks
+        List<StudyTask> allTasks = studyTaskDAO.findByGoalId(plan.getId());
+
+        // Separate completed tasks (preserve these)
+        List<StudyTask> completedTasks = new ArrayList<>();
+        List<StudyTask> otherTasks = new ArrayList<>();
+
+        for (StudyTask task : allTasks) {
+            if ("COMPLETED".equals(task.getStatus())) {
+                completedTasks.add(task);
+            } else {
+                otherTasks.add(task);
+            }
+        }
+
+        System.out.println("\n=== GENERATING TASKS ===");
+        System.out.println("Plan ID: " + plan.getId());
+        System.out.println("Completed tasks preserved: " + completedTasks.size());
+        System.out.println("Pending/Missed tasks to regenerate: " + otherTasks.size());
+        System.out.println("Topics found: " + topics.size());
+
+        // Delete only pending/missed tasks (not completed)
+        for (StudyTask task : otherTasks) {
+            studyTaskDAO.deleteTaskById(task.getId());
+        }
+        System.out.println("Deleted " + otherTasks.size() + " pending/missed tasks");
+
+        // Generate new tasks
+        List<StudyTask> newTasks = planGenerator.generateTasksFromTopics(plan);
+        System.out.println("Generated " + newTasks.size() + " new tasks");
+
+        if (newTasks.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No tasks were generated. Please check if you have topics added and deadline is in the future.",
+                    "Warning",
+                    JOptionPane.WARNING_MESSAGE);
+            // Restore the pending tasks if generation failed?
+            // But they're already deleted, so we need to handle this
+            return;
+        }
+
+        // Save new tasks
+        studyTaskDAO.saveAll(newTasks);
+        System.out.println("✅ Saved " + newTasks.size() + " new tasks to database");
+
+        JOptionPane.showMessageDialog(this,
+                "Tasks generated successfully!\n" +
+                        "Preserved: " + completedTasks.size() + " completed tasks\n" +
+                        "New tasks: " + newTasks.size() + "\n" +
+                        "Total tasks: " + (completedTasks.size() + newTasks.size()),
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
+
+        // Refresh the tasks display
         loadTasks();
+        checkMissedTasks();
 
-        // Refresh any open DashboardFrame
-        refreshDashboardIfOpen();
+        // Refresh parent dashboard and study plan
+        if (parentFrame != null) {
+            parentFrame.refreshDashboardFromPlans();
+            parentFrame.refreshStudyPlan();
+        }
+        System.out.println("=== TASKS GENERATION COMPLETE ===\n");
     }
 
-    // Helper to find and refresh any open DashboardFrame
-    private void refreshDashboardIfOpen() {
-        for (Window window : Window.getWindows()) {
-            if (window instanceof JFrame) {
-                JFrame frame = (JFrame) window;
-                // Check if the frame contains a DashboardFrame (it might be the content pane or a panel)
-                Component[] components = frame.getContentPane().getComponents();
-                for (Component comp : components) {
-                    if (comp instanceof DashboardFrame) {
-                        ((DashboardFrame) comp).refresh();
-                        return;
-                    } else if (comp instanceof JPanel) {
-                        // Recursively search panels (simplified: just one level)
-                        for (Component sub : ((JPanel) comp).getComponents()) {
-                            if (sub instanceof DashboardFrame) {
-                                ((DashboardFrame) sub).refresh();
-                                return;
-                            }
-                        }
-                    }
+    private void checkMissedTasks() {
+        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
+        int missedCount = missedTasks.size();
+        missedTasksLabel.setText(String.valueOf(missedCount));
+
+        if (missedCount > 0) {
+            missedTasksLabel.setForeground(DANGER_COLOR);
+        } else {
+            missedTasksLabel.setForeground(SUCCESS_COLOR);
+        }
+    }
+
+    private void rescheduleMissedTasks() {
+        plan = studyPlanDAO.findById(plan.getId());
+
+        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
+
+        if (missedTasks.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No missed tasks to reschedule! Great job! 🎉",
+                    "No Missed Tasks",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), plan.getDeadline());
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "You have " + missedTasks.size() + " missed task(s).\n" +
+                        "Current daily hours: " + plan.getDailyHours() + "\n" +
+                        "Days remaining: " + daysRemaining + "\n\n" +
+                        "These will be distributed evenly across your remaining days.\n" +
+                        "Continue?",
+                "Reschedule Missed Tasks",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        PlanRescheduler planRescheduler = new PlanRescheduler();
+        PlanRescheduler.RescheduleResult result = planRescheduler.rescheduleMissedTasks(plan.getId(), missedTasks);
+
+        if (result.success) {
+            StringBuilder message = new StringBuilder("✅ " + result.message + "\n\nNew distribution:\n");
+            if (result.newDistribution != null) {
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
+                for (Map.Entry<LocalDate, Integer> entry : result.newDistribution.entrySet()) {
+                    message.append("• ").append(entry.getKey().format(fmt))
+                            .append(": ").append(entry.getValue()).append(" tasks\n");
                 }
+            }
+
+            JOptionPane.showMessageDialog(this,
+                    message.toString(),
+                    "Rescheduling Successful",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+            loadTasks();
+            checkMissedTasks();
+
+            if (parentFrame != null) {
+                parentFrame.refreshDashboardFromPlans();
+            }
+        } else {
+            if (result.message.contains("increase daily hours")) {
+                JOptionPane.showMessageDialog(this,
+                        "❌ " + result.message + "\n\n" +
+                                "To fix this:\n" +
+                                "1. Click 'Update Plan' button\n" +
+                                "2. Increase the 'Hours per Day' value\n" +
+                                "3. Click 'Update Plan' to save\n" +
+                                "4. Try rescheduling again",
+                        "Need More Hours",
+                        JOptionPane.WARNING_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "❌ " + result.message,
+                        "Rescheduling Failed",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -419,32 +558,14 @@ public class PlanManagementFrame extends JFrame {
             subjectsArray[i] = subjectsArray[i].trim();
         }
 
-        AddTopicDialog dialog = new AddTopicDialog(this, plan.getId(), subjectsArray);
+        Window window = SwingUtilities.getWindowAncestor(this);
+        Frame parentFrame = (window instanceof Frame) ? (Frame) window : null;
+
+        AddTopicDialog dialog = new AddTopicDialog(parentFrame, plan.getId(), subjectsArray);
         dialog.setVisible(true);
         if (dialog.isSucceeded()) {
             loadTopics();
         }
-    }
-
-    private void generateTasks() {
-        List<Topic> topics = topicDAO.findByPlanId(plan.getId());
-        if (topics.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please add topics first.", "No Topics", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "This will replace all existing tasks. Continue?",
-                "Confirm", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
-
-        studyTaskDAO.deleteByGoalId(plan.getId());
-        List<StudyTask> newTasks = planGenerator.generateTasksFromTopics(plan);
-        studyTaskDAO.saveAll(newTasks);
-
-        JOptionPane.showMessageDialog(this, "Tasks generated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-        loadTasks();
-        refreshDashboardIfOpen();
     }
 
     private void updatePlan() {
@@ -464,31 +585,89 @@ public class PlanManagementFrame extends JFrame {
             }
 
             if (newDeadline.isBefore(LocalDate.now())) {
-                JOptionPane.showMessageDialog(this,
-                        "Exam date must be in the future!",
-                        "Invalid Date",
-                        JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Exam date must be in the future!", "Invalid Date", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
+            LocalDate oldDeadline = plan.getDeadline();
+            int oldHours = plan.getDailyHours();
+
+            System.out.println("\n=== UPDATING PLAN ===");
+            System.out.println("Old Deadline: " + oldDeadline);
+            System.out.println("New Deadline: " + newDeadline);
+            System.out.println("Old Hours: " + oldHours);
+            System.out.println("New Hours: " + newHours);
+
+            // Get all existing tasks
+            List<StudyTask> allTasks = studyTaskDAO.findByGoalId(plan.getId());
+            LocalDate today = LocalDate.now();
+
+            // Separate completed and pending tasks
+            List<StudyTask> completedTasks = new ArrayList<>();
+            List<StudyTask> pendingTasks = new ArrayList<>();
+
+            for (StudyTask task : allTasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    completedTasks.add(task);
+                } else {
+                    pendingTasks.add(task);
+                }
+            }
+
+            System.out.println("Completed tasks: " + completedTasks.size());
+            System.out.println("Pending tasks: " + pendingTasks.size());
+
+            // Update plan object
             plan.setDeadline(newDeadline);
             plan.setDailyHours(newHours);
             plan.setDifficulty(difficultyEnum);
-
             studyPlanDAO.update(plan);
 
+            // Handle tasks based on date and hour changes
+            if (!newDeadline.equals(oldDeadline) || newHours != oldHours) {
+
+                // Delete all pending tasks (completed tasks remain)
+                for (StudyTask task : pendingTasks) {
+                    studyTaskDAO.deleteByGoalId(task.getId());
+                }
+                System.out.println("Deleted " + pendingTasks.size() + " pending tasks");
+
+                // Get topics for generating new tasks
+                List<Topic> topics = topicDAO.findByPlanId(plan.getId());
+
+                if (!topics.isEmpty()) {
+                    // Generate new tasks based on updated plan
+                    List<StudyTask> newTasks = planGenerator.generateTasksFromTopics(plan);
+
+                    if (!newTasks.isEmpty()) {
+                        // Save new tasks
+                        studyTaskDAO.saveAll(newTasks);
+                        System.out.println("Generated " + newTasks.size() + " new tasks for updated plan");
+                    }
+                }
+            }
+
             JOptionPane.showMessageDialog(this,
-                    "Plan updated successfully!",
+                    "Plan updated successfully!\n" +
+                            "Completed tasks preserved: " + completedTasks.size() + "\n" +
+                            "New tasks generated for updated schedule.",
                     "Success",
                     JOptionPane.INFORMATION_MESSAGE);
 
+            // Refresh UI
             loadPlanData();
+            loadTasks();
+            checkMissedTasks();
+
+            // Refresh parent
+            if (parentFrame != null) {
+                parentFrame.refreshDashboardFromPlans();
+                parentFrame.refreshStudyPlan();
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error: " + e.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -500,6 +679,16 @@ public class PlanManagementFrame extends JFrame {
             studyTaskDAO.deleteByGoalId(plan.getId());
             topicDAO.deleteByPlanId(plan.getId());
             studyPlanDAO.deleteById(plan.getId());
+
+            if (user.getActivePlanId() != null && user.getActivePlanId() == plan.getId()) {
+                userDAO.updateActivePlan(user.getId(), null);
+                user.setActivePlanId(null);
+                if (parentFrame != null) {
+                    parentFrame.refreshDashboardFromPlans();
+                    parentFrame.refreshStudyPlan();
+                }
+            }
+
             JOptionPane.showMessageDialog(this, "Plan deleted.", "Deleted", JOptionPane.INFORMATION_MESSAGE);
             dispose();
         }
