@@ -2,6 +2,7 @@ package dao;
 
 import db.DBConnection;
 import model.StudyTask;
+import model.DailyTask;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -10,8 +11,8 @@ import java.util.List;
 
 public class StudyTaskDAO {
 
-    public void save(StudyTask task) {
-        // Include all columns that are NOT NULL or need to be set
+    // For DailyTask (used by GitHub/IT)
+    public void save(DailyTask dailyTask) {
         String sql = "INSERT INTO study_tasks (user_id, goal_id, repository_name, task_date, planned_hours, actual_hours, " +
                 "planned_commits, actual_commits, description, required_commit, status, topic_id, session_type) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -19,52 +20,52 @@ public class StudyTaskDAO {
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            // user_id (GitHub flow)
-            if (task.getUserId() > 0) {
-                stmt.setInt(1, task.getUserId());
-            } else {
-                stmt.setNull(1, Types.INTEGER);
+            stmt.setInt(1, dailyTask.getUserId());
+            stmt.setInt(2, dailyTask.getGoalId());
+            stmt.setString(3, dailyTask.getRepositoryName());
+            stmt.setDate(4, Date.valueOf(dailyTask.getTaskDate()));
+            stmt.setInt(5, dailyTask.getPlannedHours());
+            stmt.setInt(6, dailyTask.getActualHours());
+            stmt.setInt(7, dailyTask.getPlannedCommits());
+            stmt.setInt(8, dailyTask.getActualCommits());
+            stmt.setString(9, dailyTask.getDescription());
+            stmt.setBoolean(10, true);
+            stmt.setString(11, dailyTask.getStatus());
+            stmt.setInt(12, 0);
+            stmt.setString(13, "CODING");
+
+            int affectedRows = stmt.executeUpdate();
+            System.out.println("StudyTaskDAO.save(DailyTask): affectedRows = " + affectedRows);
+
+            if (affectedRows > 0) {
+                ResultSet rs = stmt.getGeneratedKeys();
+                if (rs.next()) {
+                    dailyTask.setId(rs.getInt(1));
+                    System.out.println("Generated task ID: " + dailyTask.getId());
+                }
+                rs.close();
             }
+        } catch (SQLException e) {
+            System.err.println("Database error in StudyTaskDAO.save(DailyTask): " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
-            // goal_id (Google flow)
-            if (task.getGoalId() > 0) {
-                stmt.setInt(2, task.getGoalId());
-            } else {
-                stmt.setNull(2, Types.INTEGER);
-            }
+    // For Normal/Google tasks - simplified INSERT
+    public void save(StudyTask task) {
+        String sql = "INSERT INTO study_tasks (goal_id, task_date, description, required_commit, status, topic_id, session_type) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-            // repository_name
-            stmt.setString(3, task.getRepositoryName());
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            // task_date
-            stmt.setDate(4, Date.valueOf(task.getTaskDate()));
-
-            // planned_hours
-            stmt.setInt(5, task.getPlannedHours());
-
-            // actual_hours
-            stmt.setInt(6, task.getActualHours());
-
-            // planned_commits
-            stmt.setInt(7, task.getPlannedCommits());
-
-            // actual_commits
-            stmt.setInt(8, task.getActualCommits());
-
-            // description
-            stmt.setString(9, task.getDescription());
-
-            // required_commit
-            stmt.setBoolean(10, task.isRequiredCommit());
-
-            // status
-            stmt.setString(11, task.getStatus());
-
-            // topic_id
-            stmt.setInt(12, task.getTopicId());
-
-            // session_type
-            stmt.setString(13, task.getSessionType());
+            stmt.setInt(1, task.getGoalId());
+            stmt.setDate(2, Date.valueOf(task.getTaskDate()));
+            stmt.setString(3, task.getDescription());
+            stmt.setBoolean(4, task.isRequiredCommit());
+            stmt.setString(5, task.getStatus());
+            stmt.setInt(6, task.getTopicId());
+            stmt.setString(7, task.getSessionType());
 
             int affectedRows = stmt.executeUpdate();
             System.out.println("StudyTaskDAO.save: affectedRows = " + affectedRows);
@@ -91,6 +92,14 @@ public class StudyTaskDAO {
         System.out.println("All tasks saved successfully");
     }
 
+    public void saveAllDailyTasks(List<DailyTask> tasks) {
+        System.out.println("Saving " + tasks.size() + " DailyTask tasks to database");
+        for (DailyTask task : tasks) {
+            save(task);
+        }
+        System.out.println("All DailyTask tasks saved successfully");
+    }
+
     public List<StudyTask> findByGoalId(int goalId) {
         List<StudyTask> tasks = new ArrayList<>();
         String sql = "SELECT * FROM study_tasks WHERE goal_id = ? ORDER BY task_date ASC";
@@ -102,8 +111,7 @@ public class StudyTaskDAO {
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
-                StudyTask task = mapResultSetToStudyTask(rs);
-                tasks.add(task);
+                tasks.add(mapResultSetToStudyTask(rs));
             }
             rs.close();
 
@@ -118,42 +126,18 @@ public class StudyTaskDAO {
 
     public List<StudyTask> findByUserId(int userId) {
         List<StudyTask> tasks = new ArrayList<>();
-
-        // Try Google flow first (with goal_id)
-        String sqlGoogle = "SELECT t.* FROM study_tasks t " +
+        String sql = "SELECT t.* FROM study_tasks t " +
                 "JOIN goals g ON t.goal_id = g.id " +
                 "WHERE g.user_id = ? ORDER BY t.task_date DESC";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sqlGoogle)) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, userId);
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
                 tasks.add(mapResultSetToStudyTask(rs));
-            }
-            rs.close();
-
-            if (!tasks.isEmpty()) {
-                return tasks;
-            }
-
-        } catch (SQLException e) {
-            // Ignore, try GitHub flow
-        }
-
-        // Try GitHub flow (direct user_id)
-        String sqlGitHub = "SELECT * FROM study_tasks WHERE user_id = ? ORDER BY task_date DESC";
-
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sqlGitHub)) {
-
-            stmt.setInt(1, userId);
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                tasks.add(mapResultSetToStudyTaskGitHub(rs));
             }
             rs.close();
 
@@ -165,63 +149,8 @@ public class StudyTaskDAO {
         return tasks;
     }
 
-    private StudyTask mapResultSetToStudyTaskGitHub(ResultSet rs) throws SQLException {
-        StudyTask task = new StudyTask();
-        task.setId(rs.getInt("id"));
-        task.setUserId(rs.getInt("user_id"));
-        task.setRepositoryName(rs.getString("repository_name"));
-        task.setTaskDate(rs.getDate("task_date").toLocalDate());
-        task.setPlannedHours(rs.getInt("planned_hours"));
-        task.setActualHours(rs.getInt("actual_hours"));
-        task.setPlannedCommits(rs.getInt("planned_commits"));
-        task.setActualCommits(rs.getInt("actual_commits"));
-        task.setStatus(rs.getString("status"));
-        task.setDescription(rs.getString("description"));
-        task.setRequiredCommit(true);
-        return task;
-    }
-
-    public void updateCommitCount(int taskId, int commits) {
-        String sql = "UPDATE study_tasks SET actual_commits = ? WHERE id = ?";
-
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, commits);
-            stmt.setInt(2, taskId);
-            int rows = stmt.executeUpdate();
-            System.out.println("✅ Task " + taskId + " commit count updated to: " + commits + " (rows: " + rows + ")");
-        } catch (SQLException e) {
-            System.err.println("❌ Database error updating commit count: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    public List<StudyTask> findTodayTasks(int userId) {
-        List<StudyTask> tasks = new ArrayList<>();
-        String sql = "SELECT t.* FROM study_tasks t " +
-                "JOIN goals g ON t.goal_id = g.id " +
-                "WHERE g.user_id = ? AND t.task_date = CURRENT_DATE " +
-                "ORDER BY t.id ASC";
-
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, userId);
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                tasks.add(mapResultSetToStudyTask(rs));
-            }
-            rs.close();
-
-            System.out.println("Found " + tasks.size() + " tasks for today for user ID: " + userId);
-        } catch (SQLException e) {
-            System.err.println("Database error in StudyTaskDAO.findTodayTasks: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        return tasks;
+    public List<StudyTask> findAllTasksByUser(int userId) {
+        return findByUserId(userId);
     }
 
     public List<StudyTask> findTodayTasksByPlan(int planId) {
@@ -248,21 +177,14 @@ public class StudyTaskDAO {
         return tasks;
     }
 
-    public List<StudyTask> findAllTasksByUser(int userId) {
-        return findByUserId(userId);
-    }
-
-    public List<StudyTask> findTasksByDate(int userId, LocalDate date) {
+    public List<StudyTask> findTasksByDate(int planId, LocalDate date) {
         List<StudyTask> tasks = new ArrayList<>();
-        String sql = "SELECT t.* FROM study_tasks t " +
-                "JOIN goals g ON t.goal_id = g.id " +
-                "WHERE g.user_id = ? AND t.task_date = ? " +
-                "ORDER BY t.id ASC";
+        String sql = "SELECT * FROM study_tasks WHERE goal_id = ? AND task_date = ? ORDER BY id";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, userId);
+            stmt.setInt(1, planId);
             stmt.setDate(2, Date.valueOf(date));
             ResultSet rs = stmt.executeQuery();
 
@@ -271,9 +193,33 @@ public class StudyTaskDAO {
             }
             rs.close();
 
-            System.out.println("Found " + tasks.size() + " tasks for date " + date + " for user ID: " + userId);
+            System.out.println("Found " + tasks.size() + " tasks for plan " + planId + " on date " + date);
         } catch (SQLException e) {
             System.err.println("Database error in StudyTaskDAO.findTasksByDate: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return tasks;
+    }
+
+    public List<StudyTask> findMissedTasks(int planId) {
+        List<StudyTask> tasks = new ArrayList<>();
+        String sql = "SELECT * FROM study_tasks WHERE goal_id = ? AND task_date < CURRENT_DATE AND status != 'COMPLETED' ORDER BY task_date DESC";
+
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, planId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                tasks.add(mapResultSetToStudyTask(rs));
+            }
+            rs.close();
+
+            System.out.println("Found " + tasks.size() + " missed tasks for plan ID: " + planId);
+        } catch (SQLException e) {
+            System.err.println("Database error in StudyTaskDAO.findMissedTasks: " + e.getMessage());
             e.printStackTrace();
         }
 
@@ -298,23 +244,42 @@ public class StudyTaskDAO {
     }
 
     public void update(StudyTask task) {
-        String sql = "UPDATE study_tasks SET status = ? WHERE id = ?";
+        updateStatus(task.getId(), task.getStatus());
+    }
+
+    public void updateCommitCount(int taskId, int commits) {
+        String sql = "UPDATE study_tasks SET actual_commits = ? WHERE id = ?";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, task.getStatus());
-            stmt.setInt(2, task.getId());
-
-            int affectedRows = stmt.executeUpdate();
-            System.out.println("✅ Task " + task.getId() + " updated (rows: " + affectedRows + ")");
+            stmt.setInt(1, commits);
+            stmt.setInt(2, taskId);
+            int rows = stmt.executeUpdate();
+            System.out.println("✅ Task " + taskId + " commit count updated to: " + commits + " (rows: " + rows + ")");
         } catch (SQLException e) {
-            System.err.println("❌ Database error in StudyTaskDAO.update: " + e.getMessage());
+            System.err.println("❌ Database error updating commit count: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    public boolean deleteByUserId(int userId) {
+    public void updatePlannedCommits(int taskId, int plannedCommits) {
+        String sql = "UPDATE study_tasks SET planned_commits = ? WHERE id = ?";
+
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, plannedCommits);
+            stmt.setInt(2, taskId);
+            int rows = stmt.executeUpdate();
+            System.out.println("✅ Task " + taskId + " planned commits updated to: " + plannedCommits + " (rows: " + rows + ")");
+        } catch (SQLException e) {
+            System.err.println("❌ Database error updating planned commits: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public int deleteByUserId(int userId) {
         String sql = "DELETE FROM study_tasks WHERE goal_id IN (SELECT id FROM goals WHERE user_id = ?)";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
@@ -323,14 +288,14 @@ public class StudyTaskDAO {
             stmt.setInt(1, userId);
             int deleted = stmt.executeUpdate();
             System.out.println("✅ Deleted " + deleted + " tasks for user " + userId);
-            return true;
+            return deleted;
         } catch (SQLException e) {
             System.err.println("Error deleting tasks: " + e.getMessage());
-            return false;
+            return 0;
         }
     }
 
-    public boolean deleteByGoalId(int goalId) {
+    public void deleteByGoalId(int goalId) {
         String sql = "DELETE FROM study_tasks WHERE goal_id = ?";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
@@ -339,11 +304,39 @@ public class StudyTaskDAO {
             stmt.setInt(1, goalId);
             int affectedRows = stmt.executeUpdate();
             System.out.println("Deleted " + affectedRows + " tasks for goal ID: " + goalId);
-            return true;
         } catch (SQLException e) {
             System.err.println("Database error in StudyTaskDAO.deleteByGoalId: " + e.getMessage());
             e.printStackTrace();
-            return false;
+        }
+    }
+
+    public void deleteTasksByGoalId(int goalId) {
+        String sql = "DELETE FROM study_tasks WHERE goal_id = ?";
+
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, goalId);
+            int affectedRows = stmt.executeUpdate();
+            System.out.println("Deleted " + affectedRows + " tasks for goal ID: " + goalId);
+        } catch (SQLException e) {
+            System.err.println("Database error in StudyTaskDAO.deleteTasksByGoalId: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void deleteTaskById(int taskId) {
+        String sql = "DELETE FROM study_tasks WHERE id = ?";
+
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, taskId);
+            int rows = stmt.executeUpdate();
+            System.out.println("Deleted task " + taskId + " (rows: " + rows + ")");
+        } catch (SQLException e) {
+            System.err.println("Error deleting task: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -439,18 +432,19 @@ public class StudyTaskDAO {
         task.setDescription(rs.getString("description"));
         task.setRequiredCommit(rs.getBoolean("required_commit"));
         task.setStatus(rs.getString("status"));
+        task.setTopicId(rs.getInt("topic_id"));
+        task.setSessionType(rs.getString("session_type"));
 
-        // CRITICAL FIX: Read commit counts from database
         try {
-            task.setPlannedCommits(rs.getInt("planned_commits"));
+            task.setUserId(rs.getInt("user_id"));
         } catch (SQLException e) {
-            task.setPlannedCommits(1);
+            task.setUserId(0);
         }
 
         try {
-            task.setActualCommits(rs.getInt("actual_commits"));
+            task.setRepositoryName(rs.getString("repository_name"));
         } catch (SQLException e) {
-            task.setActualCommits(0);
+            task.setRepositoryName(null);
         }
 
         try {
@@ -466,29 +460,15 @@ public class StudyTaskDAO {
         }
 
         try {
-            task.setUserId(rs.getInt("user_id"));
+            task.setPlannedCommits(rs.getInt("planned_commits"));
         } catch (SQLException e) {
-            task.setUserId(0);
+            task.setPlannedCommits(0);
         }
 
         try {
-            task.setRepositoryName(rs.getString("repository_name"));
+            task.setActualCommits(rs.getInt("actual_commits"));
         } catch (SQLException e) {
-            task.setRepositoryName(null);
-        }
-
-        // Handle nullable fields
-        try {
-            task.setTopicId(rs.getInt("topic_id"));
-            if (rs.wasNull()) task.setTopicId(0);
-        } catch (SQLException e) {
-            task.setTopicId(0);
-        }
-
-        try {
-            task.setSessionType(rs.getString("session_type"));
-        } catch (SQLException e) {
-            task.setSessionType(null);
+            task.setActualCommits(0);
         }
 
         return task;
