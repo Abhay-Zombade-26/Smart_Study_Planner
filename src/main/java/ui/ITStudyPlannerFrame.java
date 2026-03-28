@@ -9,6 +9,7 @@ import dao.StudyTaskDAO;
 import dao.GoalDAO;
 import dao.StudyPlanDAO;
 import dao.UserDAO;
+import java.awt.event.MouseEvent;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -20,6 +21,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.Map;
+import javax.imageio.ImageIO;
+import java.net.URL;
 
 public class ITStudyPlannerFrame extends JFrame {
 
@@ -39,23 +42,21 @@ public class ITStudyPlannerFrame extends JFrame {
     private Integer currentActivePlanId;
     private JLabel activePlanLabel;
     private GitHubCommitChecker commitChecker;
-    private String currentVisiblePanel; // Track currently visible panel
+    private String currentVisiblePanel;
 
-    // Store panel names as constants
     private static final String PANEL_GOAL_SETUP = "GOAL_SETUP";
     private static final String PANEL_DASHBOARD = "DASHBOARD";
     private static final String PANEL_STUDY_PLAN = "STUDY_PLAN";
     private static final String PANEL_GITHUB_PROGRESS = "GITHUB_PROGRESS";
     private static final String PANEL_VIEW_PLANS = "VIEW_PLANS";
     private static final String PANEL_PROFILE = "PROFILE";
+    private static final String PANEL_ABOUT = "ABOUT";
 
-    // Store panel references for dynamic refresh
     private JPanel dashboardPanel;
     private JPanel studyPlanPanel;
     private JPanel gitHubProgressPanel;
     private JPanel viewPlansPanel;
 
-    // Color scheme
     private final Color SIDEBAR_BG = new Color(26, 32, 44);
     private final Color SIDEBAR_HOVER = new Color(44, 55, 74);
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
@@ -64,6 +65,9 @@ public class ITStudyPlannerFrame extends JFrame {
     private final Color WARNING_COLOR = new Color(245, 158, 11);
     private final Color BG_LIGHT = new Color(249, 250, 251);
     private final Color BORDER_COLOR = new Color(229, 231, 235);
+    private final Color TEXT_PRIMARY = new Color(17, 24, 39);
+    private final Color TEXT_SECONDARY = new Color(107, 114, 128);
+    private final Color CARD_BG = Color.WHITE;
 
     public ITStudyPlannerFrame(User user) {
         this.user = user;
@@ -79,6 +83,7 @@ public class ITStudyPlannerFrame extends JFrame {
 
         System.out.println("=== ITStudyPlannerFrame Constructor ===");
         System.out.println("User: " + user.getEmail());
+        System.out.println("User ID: " + user.getId());
         System.out.println("Active Plan ID: " + currentActivePlanId);
 
         setTitle("Smart Study Planner - " + user.getGithubUsername());
@@ -115,19 +120,18 @@ public class ITStudyPlannerFrame extends JFrame {
         contentPanel.setBackground(BG_LIGHT);
         contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // Create all panels
         dashboardPanel = new DashboardFrame(user).getMainPanel();
         studyPlanPanel = createStudyPlanPanel();
         gitHubProgressPanel = createGitHubProgressPanel();
         viewPlansPanel = createViewPlansPanel();
 
-        // Add all screens
         contentPanel.add(createGoalSetupPanel(), PANEL_GOAL_SETUP);
         contentPanel.add(dashboardPanel, PANEL_DASHBOARD);
         contentPanel.add(studyPlanPanel, PANEL_STUDY_PLAN);
         contentPanel.add(gitHubProgressPanel, PANEL_GITHUB_PROGRESS);
         contentPanel.add(viewPlansPanel, PANEL_VIEW_PLANS);
-        contentPanel.add(new ProfileFrame(user).getMainPanel(), PANEL_PROFILE);
+        contentPanel.add(createProfilePanel(), PANEL_PROFILE);
+        contentPanel.add(createAboutPanel(), PANEL_ABOUT);
 
         mainPanel.add(sidebarPanel, BorderLayout.WEST);
         mainPanel.add(contentPanel, BorderLayout.CENTER);
@@ -144,7 +148,6 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.setPreferredSize(new Dimension(280, getHeight()));
         sidebarPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, BORDER_COLOR));
 
-        // Logo
         JPanel logoPanel = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -168,7 +171,6 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.add(logoPanel);
         sidebarPanel.add(Box.createVerticalStrut(20));
 
-        // User profile card
         JPanel userCard = new JPanel();
         userCard.setLayout(new BoxLayout(userCard, BoxLayout.Y_AXIS));
         userCard.setBackground(new Color(44, 55, 74));
@@ -196,17 +198,16 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.add(userCard);
         sidebarPanel.add(Box.createVerticalStrut(30));
 
-        // Navigation buttons
         addNavButton("Goal Setup", PANEL_GOAL_SETUP, PRIMARY_COLOR);
         addNavButton("Dashboard", PANEL_DASHBOARD, SUCCESS_COLOR);
         addNavButton("My Study Plan", PANEL_STUDY_PLAN, WARNING_COLOR);
         addNavButton("GitHub Progress", PANEL_GITHUB_PROGRESS, new Color(139, 92, 246));
         addNavButton("View My Plans", PANEL_VIEW_PLANS, new Color(236, 72, 153));
         addNavButton("Profile", PANEL_PROFILE, new Color(59, 130, 246));
+        addNavButton("About", PANEL_ABOUT, new Color(139, 92, 246));
 
         sidebarPanel.add(Box.createVerticalGlue());
 
-        // Active plan indicator
         JPanel activePlanPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         activePlanPanel.setBackground(SIDEBAR_BG);
         activePlanPanel.setMaximumSize(new Dimension(260, 40));
@@ -225,7 +226,6 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.add(activePlanPanel);
         sidebarPanel.add(Box.createVerticalStrut(10));
 
-        // Logout button
         JButton logoutBtn = new JButton("Logout");
         logoutBtn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         logoutBtn.setForeground(Color.WHITE);
@@ -253,6 +253,226 @@ public class ITStudyPlannerFrame extends JFrame {
         sidebarPanel.add(Box.createVerticalStrut(20));
     }
 
+    private JPanel createProfilePanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
+
+        JLabel headerLabel = new JLabel("Profile");
+        headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        headerLabel.setForeground(TEXT_PRIMARY);
+        headerLabel.setBorder(new EmptyBorder(0, 0, 20, 0));
+        panel.add(headerLabel, BorderLayout.NORTH);
+
+        JPanel contentPanel = new JPanel(new BorderLayout(25, 0));
+        contentPanel.setBackground(Color.WHITE);
+
+        JPanel avatarPanel = new JPanel();
+        avatarPanel.setLayout(new BoxLayout(avatarPanel, BoxLayout.Y_AXIS));
+        avatarPanel.setBackground(CARD_BG);
+        avatarPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(40, 40, 40, 40)
+        ));
+
+        JLabel avatarLabel = new JLabel();
+        avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 80));
+        avatarLabel.setForeground(PRIMARY_COLOR);
+        avatarLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        avatarLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
+            try {
+                URL url = new URL(user.getAvatarUrl());
+                java.awt.Image image = ImageIO.read(url);
+                if (image != null) {
+                    java.awt.Image scaledImage = image.getScaledInstance(100, 100, java.awt.Image.SCALE_SMOOTH);
+                    ImageIcon icon = new ImageIcon(scaledImage);
+                    avatarLabel.setIcon(icon);
+                    avatarLabel.setText("");
+                } else {
+                    avatarLabel.setText("🐙");
+                    avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 80));
+                }
+            } catch (Exception e) {
+                avatarLabel.setText("🐙");
+                avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 80));
+            }
+        } else {
+            avatarLabel.setText("🐙");
+            avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 80));
+        }
+
+        JLabel nameLabel = new JLabel(user.getName());
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        nameLabel.setForeground(TEXT_PRIMARY);
+        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel roleLabel = new JLabel("💻 IT Student");
+        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        roleLabel.setForeground(PRIMARY_COLOR);
+        roleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        avatarPanel.add(avatarLabel);
+        avatarPanel.add(Box.createVerticalStrut(15));
+        avatarPanel.add(nameLabel);
+        avatarPanel.add(Box.createVerticalStrut(5));
+        avatarPanel.add(roleLabel);
+
+        JPanel infoPanel = new JPanel(new GridBagLayout());
+        infoPanel.setBackground(CARD_BG);
+        infoPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(30, 30, 30, 30)
+        ));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        gbc.gridx = 0; gbc.gridy = 0;
+        infoPanel.add(createInfoLabel("📧 Email:"), gbc);
+        gbc.gridx = 1;
+        JLabel emailLabel = new JLabel(user.getEmail());
+        emailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        infoPanel.add(emailLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1;
+        infoPanel.add(createInfoLabel("🔐 Login Provider:"), gbc);
+        gbc.gridx = 1;
+        JLabel providerLabel = new JLabel("GitHub");
+        providerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        providerLabel.setForeground(PRIMARY_COLOR);
+        infoPanel.add(providerLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 2;
+        infoPanel.add(createInfoLabel("🐙 GitHub Username:"), gbc);
+        gbc.gridx = 1;
+        JLabel githubLabel = new JLabel(user.getGithubUsername() != null ? user.getGithubUsername() : "Not linked");
+        githubLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        githubLabel.setForeground(SUCCESS_COLOR);
+        infoPanel.add(githubLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 3;
+        infoPanel.add(createInfoLabel("📅 Member Since:"), gbc);
+        gbc.gridx = 1;
+        JLabel memberLabel = new JLabel(LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+        memberLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        infoPanel.add(memberLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 4;
+        infoPanel.add(createInfoLabel("📚 Active Plans:"), gbc);
+        gbc.gridx = 1;
+        List<StudyPlan> plans = planDAO.findByUserIdAndRole(user.getId(), "IT", "GITHUB");
+        JLabel plansCountLabel = new JLabel(String.valueOf(plans.size()));
+        plansCountLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        plansCountLabel.setForeground(SUCCESS_COLOR);
+        infoPanel.add(plansCountLabel, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 5;
+        infoPanel.add(createInfoLabel("📊 Total Commits:"), gbc);
+        gbc.gridx = 1;
+        int totalCommits = 0;
+        for (StudyPlan plan : plans) {
+            List<StudyTask> tasks = taskDAO.findByGoalId(plan.getId());
+            totalCommits += tasks.stream().mapToInt(StudyTask::getActualCommits).sum();
+        }
+        JLabel commitsLabel = new JLabel(String.valueOf(totalCommits));
+        commitsLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        commitsLabel.setForeground(SUCCESS_COLOR);
+        infoPanel.add(commitsLabel, gbc);
+
+        contentPanel.add(avatarPanel, BorderLayout.WEST);
+        contentPanel.add(infoPanel, BorderLayout.CENTER);
+
+        panel.add(contentPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JLabel createInfoLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setForeground(TEXT_PRIMARY);
+        return label;
+    }
+
+    private JPanel createAboutPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
+
+        JLabel headerLabel = new JLabel("About Smart Study Planner");
+        headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        headerLabel.setForeground(TEXT_PRIMARY);
+        headerLabel.setBorder(new EmptyBorder(0, 0, 20, 0));
+        panel.add(headerLabel, BorderLayout.NORTH);
+
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBackground(CARD_BG);
+        contentPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(30, 30, 30, 30)
+        ));
+
+        JLabel appIcon = new JLabel("📚");
+        appIcon.setFont(new Font("Segoe UI", Font.PLAIN, 64));
+        appIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(appIcon);
+        contentPanel.add(Box.createVerticalStrut(10));
+
+        JLabel appName = new JLabel("Smart Study Planner");
+        appName.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        appName.setForeground(PRIMARY_COLOR);
+        appName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(appName);
+        contentPanel.add(Box.createVerticalStrut(5));
+
+        JLabel versionLabel = new JLabel("Version 2.0.0 - IT Edition");
+        versionLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        versionLabel.setForeground(TEXT_SECONDARY);
+        versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(versionLabel);
+        contentPanel.add(Box.createVerticalStrut(20));
+
+        JSeparator separator = new JSeparator();
+        separator.setMaximumSize(new Dimension(500, 2));
+        separator.setForeground(BORDER_COLOR);
+        separator.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(separator);
+        contentPanel.add(Box.createVerticalStrut(20));
+
+        JTextArea descriptionArea = new JTextArea(
+                "Smart Study Planner is a comprehensive productivity tool designed to help students manage their studies effectively.\n\n" +
+                        "✨ Key Features:\n" +
+                        "• Dual Authentication: Login with Google (Normal Student) or GitHub (IT Student)\n" +
+                        "• Personalized Study Plans\n" +
+                        "• Smart Task Generation\n" +
+                        "• Progress Tracking & Streaks\n" +
+                        "• GitHub Integration for IT Students\n" +
+                        "• AI-Powered Project Planning\n\n" +
+                        "© 2026 Smart Study Planner. All rights reserved.\n" +
+                        "Made with ❤️ for students worldwide."
+        );
+        descriptionArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        descriptionArea.setEditable(false);
+        descriptionArea.setBackground(CARD_BG);
+        descriptionArea.setForeground(TEXT_SECONDARY);
+        descriptionArea.setLineWrap(true);
+        descriptionArea.setWrapStyleWord(true);
+        descriptionArea.setAlignmentX(Component.CENTER_ALIGNMENT);
+        descriptionArea.setBorder(new EmptyBorder(10, 20, 10, 20));
+
+        JScrollPane scrollPane = new JScrollPane(descriptionArea);
+        scrollPane.setBorder(null);
+        scrollPane.setPreferredSize(new Dimension(800, 450));
+        scrollPane.setAlignmentX(Component.CENTER_ALIGNMENT);
+        contentPanel.add(scrollPane);
+
+        panel.add(contentPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
     private String getFormattedActivePlanName() {
         if (currentActivePlanId != null) {
             StudyPlan plan = planDAO.findById(currentActivePlanId);
@@ -263,8 +483,7 @@ public class ITStudyPlannerFrame extends JFrame {
                 }
                 String repo = plan.getRepositoryName();
                 if (repo != null && !repo.isEmpty()) {
-                    String[] repos = repo.split(", ");
-                    return repos.length > 0 ? repos[0] : repo;
+                    return repo;
                 }
                 return "Plan " + plan.getId();
             }
@@ -305,8 +524,6 @@ public class ITStudyPlannerFrame extends JFrame {
                 }
             }
             button.setForeground(accentColor);
-
-            // Refresh the current panel when navigated
             refreshCurrentPanel(cardName);
         });
 
@@ -332,15 +549,10 @@ public class ITStudyPlannerFrame extends JFrame {
     }
 
     private void refreshStudyPlanPanel() {
-        // Create new panel
         JPanel newPanel = createStudyPlanPanel();
-
-        // Replace in contentPanel
         contentPanel.remove(studyPlanPanel);
         contentPanel.add(newPanel, PANEL_STUDY_PLAN);
         studyPlanPanel = newPanel;
-
-        // If currently showing, refresh view
         if (PANEL_STUDY_PLAN.equals(currentVisiblePanel)) {
             cardLayout.show(contentPanel, PANEL_STUDY_PLAN);
         }
@@ -353,7 +565,6 @@ public class ITStudyPlannerFrame extends JFrame {
         contentPanel.remove(gitHubProgressPanel);
         contentPanel.add(newPanel, PANEL_GITHUB_PROGRESS);
         gitHubProgressPanel = newPanel;
-
         if (PANEL_GITHUB_PROGRESS.equals(currentVisiblePanel)) {
             cardLayout.show(contentPanel, PANEL_GITHUB_PROGRESS);
         }
@@ -366,7 +577,6 @@ public class ITStudyPlannerFrame extends JFrame {
         contentPanel.remove(viewPlansPanel);
         contentPanel.add(newPanel, PANEL_VIEW_PLANS);
         viewPlansPanel = newPanel;
-
         if (PANEL_VIEW_PLANS.equals(currentVisiblePanel)) {
             cardLayout.show(contentPanel, PANEL_VIEW_PLANS);
         }
@@ -379,7 +589,6 @@ public class ITStudyPlannerFrame extends JFrame {
         contentPanel.remove(dashboardPanel);
         contentPanel.add(newPanel, PANEL_DASHBOARD);
         dashboardPanel = newPanel;
-
         if (PANEL_DASHBOARD.equals(currentVisiblePanel)) {
             cardLayout.show(contentPanel, PANEL_DASHBOARD);
         }
@@ -400,7 +609,6 @@ public class ITStudyPlannerFrame extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 20, 10, 20);
 
-        // Header
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(Color.WHITE);
 
@@ -423,7 +631,6 @@ public class ITStudyPlannerFrame extends JFrame {
         panel.add(headerPanel, gbc);
         panel.add(Box.createVerticalStrut(20), gbc);
 
-        // Repository selection
         JPanel repoCard = new JPanel(new GridBagLayout());
         repoCard.setBackground(new Color(249, 250, 251));
         repoCard.setBorder(BorderFactory.createCompoundBorder(
@@ -457,7 +664,6 @@ public class ITStudyPlannerFrame extends JFrame {
         panel.add(repoCard, gbc);
         panel.add(Box.createVerticalStrut(10), gbc);
 
-        // Buttons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
         buttonPanel.setBackground(Color.WHITE);
 
@@ -553,7 +759,6 @@ public class ITStudyPlannerFrame extends JFrame {
         MultiRepoSelectionDialog dialog = new MultiRepoSelectionDialog(this, user, repositories);
         dialog.setVisible(true);
 
-        // Refresh all panels after generating plan
         refreshViewPlansPanel();
         refreshStudyPlanPanel();
         refreshGitHubProgressPanel();
@@ -585,10 +790,32 @@ public class ITStudyPlannerFrame extends JFrame {
 
         String[] columns = {"Day", "Date", "Task", "Status", "Commits"};
         DefaultTableModel model = new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int col) { return false; }
+            @Override
+            public boolean isCellEditable(int row, int col) {
+                return false;
+            }
         };
 
-        JTable planTable = new JTable(model);
+        JTable planTable = new JTable(model) {
+            @Override
+            public String getToolTipText(MouseEvent e) {
+                java.awt.Point p = e.getPoint();
+                int row = rowAtPoint(p);
+                int col = columnAtPoint(p);
+
+                if (col == 2 && row >= 0) {
+                    Object value = getValueAt(row, col);
+                    if (value != null) {
+                        String taskText = value.toString();
+                        return "<html><body style='width:350px; padding:10px; font-family:Segoe UI;'>" +
+                                "<b>📝 Task Details:</b><br><br>" +
+                                taskText + "</body></html>";
+                    }
+                }
+                return null;
+            }
+        };
+
         planTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         planTable.setRowHeight(50);
         planTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -597,17 +824,44 @@ public class ITStudyPlannerFrame extends JFrame {
         planTable.setGridColor(BORDER_COLOR);
         planTable.getColumnModel().getColumn(3).setCellRenderer(new StatusCellRenderer());
 
+        // Set custom renderer for Task column to truncate and show tooltip
+        planTable.getColumnModel().getColumn(2).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (c instanceof JLabel) {
+                    JLabel label = (JLabel) c;
+                    String text = value != null ? value.toString() : "";
+                    // Set tooltip on the renderer
+                    label.setToolTipText("<html><body style='width:350px; padding:10px;'>" + text + "</body></html>");
+                    // Truncate long text with ellipsis
+                    if (text.length() > 50) {
+                        label.setText(text.substring(0, 47) + "...");
+                    } else {
+                        label.setText(text);
+                    }
+                }
+                return c;
+            }
+        });
+
         JScrollPane scrollPane = new JScrollPane(planTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
 
         loadActivePlanTasks(model);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
         buttonPanel.setBackground(Color.WHITE);
 
         JButton refreshBtn = new JButton("🔄 Check Commits");
-        refreshBtn.setBackground(PRIMARY_COLOR);
-        refreshBtn.setForeground(Color.WHITE);
+        refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        refreshBtn.setForeground(Color.WHITE);  // White text
+        refreshBtn.setBackground(PRIMARY_COLOR); // Blue background
+        refreshBtn.setBorderPainted(false);
+        refreshBtn.setFocusPainted(false);
+        refreshBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        refreshBtn.setPreferredSize(new Dimension(140, 35));
         refreshBtn.addActionListener(e -> {
             JDialog loadingDialog = new JDialog(this, "Checking Commits", true);
             loadingDialog.setSize(300, 100);
@@ -642,9 +896,14 @@ public class ITStudyPlannerFrame extends JFrame {
             loadingDialog.setVisible(true);
         });
 
-        JButton deletePlanBtn = new JButton("Delete Current Plan");
-        deletePlanBtn.setBackground(DANGER_COLOR);
-        deletePlanBtn.setForeground(Color.WHITE);
+        JButton deletePlanBtn = new JButton("🗑️ Delete Current Plan");
+        deletePlanBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        deletePlanBtn.setForeground(Color.WHITE);  // White text
+        deletePlanBtn.setBackground(DANGER_COLOR); // Red background
+        deletePlanBtn.setBorderPainted(false);
+        deletePlanBtn.setFocusPainted(false);
+        deletePlanBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        deletePlanBtn.setPreferredSize(new Dimension(150, 35));
         deletePlanBtn.addActionListener(e -> deleteCurrentPlan());
 
         buttonPanel.add(refreshBtn);
@@ -664,30 +923,44 @@ public class ITStudyPlannerFrame extends JFrame {
                 return;
             }
 
+            StudyPlan plan = planDAO.findById(currentActivePlanId);
+            if (plan == null) {
+                model.addRow(new Object[]{"-", "-", "Plan not found", "-", "-"});
+                return;
+            }
+
             List<StudyTask> tasks = taskDAO.findByGoalId(currentActivePlanId);
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
 
-            int day = 1;
-            for (StudyTask task : tasks) {
-                String status = "COMPLETED".equals(task.getStatus()) ? "✅ Completed" :
-                        "MISSED".equals(task.getStatus()) ? "❌ Missed" : "⏳ Pending";
+            System.out.println("Loading " + tasks.size() + " tasks for plan " + currentActivePlanId);
 
-                // FIX: Show actual commit counts
-                String commitInfo = task.getActualCommits() + "/" + task.getPlannedCommits();
+            if (tasks.isEmpty()) {
+                model.addRow(new Object[]{"-", "-", "No tasks found for this plan. Generate tasks first.", "-", "-"});
+            } else {
+                int day = 1;
+                for (StudyTask task : tasks) {
+                    String status = "COMPLETED".equals(task.getStatus()) ? "✅ Completed" :
+                            "MISSED".equals(task.getStatus()) ? "❌ Missed" : "⏳ Pending";
 
-                model.addRow(new Object[]{
-                        "Day " + day,
-                        task.getTaskDate().format(fmt),
-                        task.getDescription(),
-                        status,
-                        commitInfo
-                });
-                day++;
-            }
-            if (model.getRowCount() == 0) {
-                model.addRow(new Object[]{"-", "-", "No tasks found for this plan", "-", "-"});
+                    // Ensure planned_commits is at least 1 for display
+                    int plannedCommits = task.getPlannedCommits();
+                    if (plannedCommits == 0) {
+                        plannedCommits = 1;
+                    }
+                    String commitInfo = task.getActualCommits() + "/" + plannedCommits;
+
+                    model.addRow(new Object[]{
+                            "Day " + day,
+                            task.getTaskDate().format(fmt),
+                            task.getDescription(),
+                            status,
+                            commitInfo
+                    });
+                    day++;
+                }
             }
         } catch (Exception e) {
+            System.err.println("Error loading tasks: " + e.getMessage());
             model.addRow(new Object[]{"-", "-", "Error loading tasks: " + e.getMessage(), "-", "-"});
         }
     }
@@ -742,37 +1015,34 @@ public class ITStudyPlannerFrame extends JFrame {
     private void loadPlans(DefaultTableModel model) {
         model.setRowCount(0);
         try {
-            List<StudyPlan> plans = planDAO.findByUserId(user.getId());
+            List<StudyPlan> plans = planDAO.findByUserIdAndRole(user.getId(), "IT", "GITHUB");
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
 
+            System.out.println("Found " + plans.size() + " IT plans for user " + user.getId());
+
             for (StudyPlan plan : plans) {
-                if (plan.getRepositoryName() != null) {
-                    List<StudyTask> tasks = taskDAO.findByGoalId(plan.getId());
-                    int totalTasks = tasks.size();
-                    int completedTasks = 0;
-                    for (StudyTask task : tasks) {
-                        if (task.isCompleted()) completedTasks++;
-                    }
-                    int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+                List<StudyTask> tasks = taskDAO.findByGoalId(plan.getId());
+                int totalTasks = tasks.size();
+                int completedTasks = (int) tasks.stream().filter(t -> "COMPLETED".equals(t.getStatus())).count();
+                int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
 
-                    String status = (currentActivePlanId != null && plan.getId() == currentActivePlanId) ? "ACTIVE" : "Inactive";
-                    String type = plan.isAiGenerated() ? "✨ AI" : "📝 Manual";
-                    String action = (currentActivePlanId != null && plan.getId() == currentActivePlanId) ? "Deactivate" : "Activate";
+                String status = (currentActivePlanId != null && currentActivePlanId == plan.getId()) ? "ACTIVE" : "Inactive";
+                String type = plan.isAiGenerated() ? "✨ AI" : "📝 Manual";
+                String action = (currentActivePlanId != null && currentActivePlanId == plan.getId()) ? "Deactivate" : "Activate";
 
-                    String repositories = plan.getRepositoryName() != null ? plan.getRepositoryName() : "N/A";
-                    String planName = plan.getPlanName() != null ? plan.getPlanName() : "Plan " + plan.getId();
+                String repositories = plan.getRepositoryName() != null ? plan.getRepositoryName() : "N/A";
+                String planName = plan.getPlanName() != null ? plan.getPlanName() : "Plan " + plan.getId();
 
-                    model.addRow(new Object[]{
-                            plan.getId(),
-                            planName,
-                            repositories,
-                            type,
-                            plan.getDeadline() != null ? plan.getDeadline().format(fmt) : "Not set",
-                            progress + "%",
-                            status,
-                            action
-                    });
-                }
+                model.addRow(new Object[]{
+                        plan.getId(),
+                        planName,
+                        repositories,
+                        type,
+                        plan.getDeadline() != null ? plan.getDeadline().format(fmt) : "Not set",
+                        progress + "%",
+                        status,
+                        action
+                });
             }
             if (model.getRowCount() == 0) {
                 model.addRow(new Object[]{"-", "No plans found", "-", "-", "-", "-", "-", "-"});
@@ -795,7 +1065,7 @@ public class ITStudyPlannerFrame extends JFrame {
 
         if (confirm == JOptionPane.YES_OPTION) {
             try {
-                taskDAO.deleteByGoalId(currentActivePlanId);
+                taskDAO.deleteTasksByGoalId(currentActivePlanId);
                 planDAO.deleteById(currentActivePlanId);
                 userDAO.updateActivePlan(user.getId(), null);
                 user.setActivePlanId(null);
@@ -814,7 +1084,6 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
 
-    // Button renderer for table
     class ButtonRenderer extends JButton implements javax.swing.table.TableCellRenderer {
         public ButtonRenderer() {
             setOpaque(true);
@@ -834,7 +1103,6 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
 
-    // Button editor for table
     class ButtonEditor extends DefaultCellEditor {
         protected JButton button;
         private String label;
@@ -902,7 +1170,6 @@ public class ITStudyPlannerFrame extends JFrame {
         }
     }
 
-    // Custom cell renderer for status
     class StatusCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
