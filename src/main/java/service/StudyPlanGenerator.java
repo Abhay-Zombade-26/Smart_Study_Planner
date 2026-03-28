@@ -89,10 +89,12 @@ public class StudyPlanGenerator {
         plan.setPlanName(planName);
         plan.setRepositoryName(repositoryNames);
         plan.setDeadline(endDate);
-        plan.setDifficulty(experienceLevels.get(0)); // Use first experience level
+        plan.setDifficulty(experienceLevels.get(0));
         plan.setDailyHours(dailyHours);
         plan.setCompletionPercentage(0);
         plan.setAiGenerated(false);
+        plan.setRole("IT");
+        plan.setLoginType("GITHUB");
 
         StudyPlan savedPlan = planDAO.save(plan);
 
@@ -102,14 +104,14 @@ public class StudyPlanGenerator {
             for (int i = 0; i < repos.length; i++) {
                 String repoName = repos[i];
                 String featureList = i < features.size() ? features.get(i) : "";
-                List<StudyTask> tasks = generateTasksForPlan(savedPlan, featureList, durationMonths, dailyHours);
-                taskDAO.saveAll(tasks);
+                List<StudyTask> tasks = generateTasksForPlan(savedPlan, featureList, durationMonths, dailyHours, repoName);
+                taskDAO.saveAllDailyTasks(convertToDailyTasks(tasks));
                 System.out.println("✅ Generated " + tasks.size() + " tasks for repository: " + repoName);
             }
         }
     }
 
-    private List<StudyTask> generateTasksForPlan(StudyPlan plan, String features, int durationMonths, int dailyHours) {
+    private List<StudyTask> generateTasksForPlan(StudyPlan plan, String features, int durationMonths, int dailyHours, String repoName) {
         List<StudyTask> tasks = new ArrayList<>();
 
         LocalDate startDate = LocalDate.now();
@@ -123,7 +125,6 @@ public class StudyPlanGenerator {
             feature = feature.trim();
             if (feature.isEmpty()) continue;
 
-            // Allocate 3-5 days per feature
             int daysPerFeature = 4;
 
             for (int day = 0; day < daysPerFeature && taskIndex < totalDays; day++) {
@@ -134,8 +135,12 @@ public class StudyPlanGenerator {
                 task.setTaskDate(taskDate);
                 task.setDescription("Implement " + feature + " - Day " + (day + 1));
                 task.setRequiredCommit(true);
+                task.setPlannedCommits(1);  // CRITICAL: Must be 1
+                task.setActualCommits(0);
                 task.setStatus("PENDING");
                 task.setTopicId(0);
+                task.setRepositoryName(repoName);
+                task.setUserId(plan.getUserId());
                 task.setSessionType("CODING");
 
                 tasks.add(task);
@@ -152,8 +157,12 @@ public class StudyPlanGenerator {
             task.setTaskDate(taskDate);
             task.setDescription("General development and testing");
             task.setRequiredCommit(true);
+            task.setPlannedCommits(1);  // CRITICAL: Must be 1
+            task.setActualCommits(0);
             task.setStatus("PENDING");
             task.setTopicId(0);
+            task.setRepositoryName(repoName);
+            task.setUserId(plan.getUserId());
             task.setSessionType("CODING");
 
             tasks.add(task);
@@ -161,6 +170,25 @@ public class StudyPlanGenerator {
         }
 
         return tasks;
+    }
+
+    private List<DailyTask> convertToDailyTasks(List<StudyTask> tasks) {
+        List<DailyTask> dailyTasks = new ArrayList<>();
+        for (StudyTask task : tasks) {
+            DailyTask dailyTask = new DailyTask();
+            dailyTask.setUserId(task.getUserId());
+            dailyTask.setGoalId(task.getGoalId());
+            dailyTask.setRepositoryName(task.getRepositoryName());
+            dailyTask.setTaskDate(task.getTaskDate());
+            dailyTask.setPlannedHours(task.getPlannedHours());
+            dailyTask.setActualHours(task.getActualHours());
+            dailyTask.setPlannedCommits(task.getPlannedCommits());
+            dailyTask.setActualCommits(task.getActualCommits());
+            dailyTask.setDescription(task.getDescription());
+            dailyTask.setStatus(task.getStatus());
+            dailyTasks.add(dailyTask);
+        }
+        return dailyTasks;
     }
 
     private void generateTasksForFeatures(User user, Goal goal, String[] features,
@@ -193,6 +221,7 @@ public class StudyPlanGenerator {
                     task.setTaskDate(taskDate);
                     task.setPlannedHours((int) Math.ceil(featureHours * subTask.getWeight()));
                     task.setPlannedCommits(1);
+                    task.setActualCommits(0);
                     task.setStatus("PENDING");
                     task.setDescription(subTask.getDescription() + " for " + feature);
 
@@ -230,6 +259,7 @@ public class StudyPlanGenerator {
                     task.setTaskDate(taskDate);
                     task.setPlannedHours(dailyHours);
                     task.setPlannedCommits(1);
+                    task.setActualCommits(0);
                     task.setStatus("PENDING");
                     task.setDescription(genericTask);
 
@@ -244,6 +274,8 @@ public class StudyPlanGenerator {
 
     public StudyPlan generatePlan(User user, String target, LocalDate deadline, int dailyHours, String difficulty) {
         StudyPlan plan = new StudyPlan(user.getId(), target, deadline, difficulty, dailyHours);
+        plan.setRole("IT");
+        plan.setLoginType("GITHUB");
         return planDAO.save(plan);
     }
 
