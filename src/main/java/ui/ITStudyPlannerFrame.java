@@ -988,6 +988,14 @@ public class ITStudyPlannerFrame extends JFrame {
             public boolean isCellEditable(int row, int col) {
                 return col == 7;
             }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) {
+                    return Integer.class;
+                }
+                return String.class;
+            }
         };
 
         JTable plansTable = new JTable(model);
@@ -997,6 +1005,30 @@ public class ITStudyPlannerFrame extends JFrame {
         plansTable.getTableHeader().setBackground(new Color(249, 250, 251));
         plansTable.setShowGrid(true);
         plansTable.setGridColor(BORDER_COLOR);
+
+        // Simple renderer for Repositories column with tooltip
+        plansTable.getColumnModel().getColumn(2).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (c instanceof JLabel) {
+                    JLabel label = (JLabel) c;
+                    String fullText = value != null ? value.toString() : "";
+
+                    // Set tooltip with full text
+                    label.setToolTipText(fullText);
+
+                    // Truncate display
+                    if (fullText.length() > 30) {
+                        label.setText(fullText.substring(0, 27) + "...");
+                    } else {
+                        label.setText(fullText);
+                    }
+                }
+                return c;
+            }
+        });
 
         plansTable.getColumn("Action").setCellRenderer(new ButtonRenderer());
         plansTable.getColumn("Action").setCellEditor(new ButtonEditor(new JCheckBox()));
@@ -1030,15 +1062,17 @@ public class ITStudyPlannerFrame extends JFrame {
                 String type = plan.isAiGenerated() ? "✨ AI" : "📝 Manual";
                 String action = (currentActivePlanId != null && currentActivePlanId == plan.getId()) ? "Deactivate" : "Activate";
 
+                // Store full repository name (no truncation)
                 String repositories = plan.getRepositoryName() != null ? plan.getRepositoryName() : "N/A";
                 String planName = plan.getPlanName() != null ? plan.getPlanName() : "Plan " + plan.getId();
+                String deadline = plan.getDeadline() != null ? plan.getDeadline().format(fmt) : "Not set";
 
                 model.addRow(new Object[]{
                         plan.getId(),
                         planName,
-                        repositories,
+                        repositories,  // Full repository name
                         type,
-                        plan.getDeadline() != null ? plan.getDeadline().format(fmt) : "Not set",
+                        deadline,
                         progress + "%",
                         status,
                         action
