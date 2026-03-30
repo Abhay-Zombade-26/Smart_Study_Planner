@@ -11,12 +11,17 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.TreeMap;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -26,6 +31,7 @@ import org.jfree.chart.plot.PiePlot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.renderer.category.BarRenderer;
 import org.jfree.chart.renderer.category.LineAndShapeRenderer;
+import org.jfree.data.category.CategoryDataset;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 
@@ -47,7 +53,7 @@ public class GitHubProgressFrame extends JPanel {
     private JLabel streakLabel;
     private JLabel lastCommitLabel;
     private JPanel mainContentPanel;
-    private JPanel chartsPanel; // Store charts panel reference
+    private JPanel chartsPanel;
 
     // Color scheme
     private final Color PRIMARY_COLOR = new Color(79, 70, 229);
@@ -92,7 +98,7 @@ public class GitHubProgressFrame extends JPanel {
         mainContentPanel.add(statsDashboard);
         mainContentPanel.add(Box.createVerticalStrut(20));
 
-        // Charts Section - Create only once
+        // Charts Section
         chartsPanel = createChartsSection();
         mainContentPanel.add(chartsPanel);
 
@@ -125,7 +131,6 @@ public class GitHubProgressFrame extends JPanel {
         leftPanel.add(titleLabel);
         leftPanel.add(subtitleLabel);
 
-        // Refresh button with modern design
         JButton refreshBtn = new JButton("🔄 Refresh Progress");
         refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         refreshBtn.setBackground(PRIMARY_COLOR);
@@ -155,11 +160,11 @@ public class GitHubProgressFrame extends JPanel {
             worker.execute();
         });
 
-        refreshBtn.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
+        refreshBtn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent evt) {
                 refreshBtn.setBackground(PRIMARY_COLOR.darker());
             }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
+            public void mouseExited(MouseEvent evt) {
                 refreshBtn.setBackground(PRIMARY_COLOR);
             }
         });
@@ -178,59 +183,48 @@ public class GitHubProgressFrame extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 10, 10, 10);
 
-        // Row 1: Active Plan Card
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
         JPanel planCard = createPlanCard();
         panel.add(planCard, gbc);
 
-        // Row 2: Progress Card
         gbc.gridy = 1;
         JPanel progressCard = createProgressCard();
         panel.add(progressCard, gbc);
 
-        // Row 3: Stats Cards (4 cards in a row)
         gbc.gridy = 2;
         gbc.gridwidth = 1;
 
-        // Completed Tasks Card
         gbc.gridx = 0;
         JPanel completedCard = createStatCard("✅ Completed Tasks", "0", SUCCESS_COLOR);
         completedTasksLabel = (JLabel) ((JPanel) completedCard.getComponent(1)).getComponent(0);
         panel.add(completedCard, gbc);
 
-        // Pending Tasks Card
         gbc.gridx = 1;
         JPanel pendingCard = createStatCard("⏳ Pending Tasks", "0", WARNING_COLOR);
         pendingTasksLabel = (JLabel) ((JPanel) pendingCard.getComponent(1)).getComponent(0);
         panel.add(pendingCard, gbc);
 
-        // Row 4: More Stats Cards
         gbc.gridy = 3;
 
-        // Missed Tasks Card
         gbc.gridx = 0;
         JPanel missedCard = createStatCard("❌ Missed Tasks", "0", DANGER_COLOR);
         missedTasksLabel = (JLabel) ((JPanel) missedCard.getComponent(1)).getComponent(0);
         panel.add(missedCard, gbc);
 
-        // Total Tasks Card
         gbc.gridx = 1;
         JPanel totalCard = createStatCard("📋 Total Tasks", "0", PRIMARY_COLOR);
         totalTasksLabel = (JLabel) ((JPanel) totalCard.getComponent(1)).getComponent(0);
         panel.add(totalCard, gbc);
 
-        // Row 5: Streak and Last Commit
         gbc.gridy = 4;
 
-        // Streak Card
         gbc.gridx = 0;
         JPanel streakCard = createStatCard("🔥 Current Streak", "0 days", WARNING_COLOR);
         streakLabel = (JLabel) ((JPanel) streakCard.getComponent(1)).getComponent(0);
         panel.add(streakCard, gbc);
 
-        // Last Commit Card
         gbc.gridx = 1;
         JPanel lastCommitCard = createStatCard("📅 Last Commit", "Never", new Color(139, 92, 246));
         lastCommitLabel = (JLabel) ((JPanel) lastCommitCard.getComponent(1)).getComponent(0);
@@ -326,22 +320,37 @@ public class GitHubProgressFrame extends JPanel {
         panel.setBackground(BG_LIGHT);
         panel.setBorder(new EmptyBorder(10, 0, 10, 0));
 
-        // Pie Chart - Task Distribution
         JPanel piePanel = createPieChartPanel();
         piePanel.setMaximumSize(new Dimension(1200, 320));
         panel.add(piePanel);
         panel.add(Box.createVerticalStrut(20));
 
-        // Line Chart - Daily Progress
         JPanel linePanel = createLineChartPanel();
         linePanel.setMaximumSize(new Dimension(1200, 380));
         panel.add(linePanel);
         panel.add(Box.createVerticalStrut(20));
 
-        // Bar Chart - Weekly Progress
         JPanel barPanel = createBarChartPanel();
         barPanel.setMaximumSize(new Dimension(1200, 380));
         panel.add(barPanel);
+
+        // Add Export CSV Button at the bottom
+        JPanel exportPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        exportPanel.setBackground(BG_LIGHT);
+        exportPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
+
+        JButton exportBtn = new JButton("📥 Download CSV Report");
+        exportBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        exportBtn.setBackground(SUCCESS_COLOR);
+        exportBtn.setForeground(Color.WHITE);
+        exportBtn.setBorderPainted(false);
+        exportBtn.setFocusPainted(false);
+        exportBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        exportBtn.setPreferredSize(new Dimension(200, 40));
+        exportBtn.addActionListener(e -> exportDataToCSV());
+
+        exportPanel.add(exportBtn);
+        panel.add(exportPanel);
 
         return panel;
     }
@@ -472,21 +481,34 @@ public class GitHubProgressFrame extends JPanel {
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
 
+        panel.add(titleLabel, BorderLayout.NORTH);
+
+        // Create dataset with proper week labels
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+        Map<Integer, Integer> weeklyCompletedData = new LinkedHashMap<>();
 
         Integer activePlanId = user.getActivePlanId();
         if (activePlanId != null) {
             List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
-            Map<Integer, Integer> weeklyCompleted = new HashMap<>();
+
+            LocalDate minDate = LocalDate.now();
+            LocalDate maxDate = LocalDate.now().minusDays(1);
+
+            for (StudyTask task : tasks) {
+                if (task.getTaskDate().isBefore(minDate)) minDate = task.getTaskDate();
+                if (task.getTaskDate().isAfter(maxDate)) maxDate = task.getTaskDate();
+            }
+
+            LocalDate startOfYear = LocalDate.of(minDate.getYear(), 1, 1);
 
             for (StudyTask task : tasks) {
                 if ("COMPLETED".equals(task.getStatus())) {
-                    int week = (task.getTaskDate().getDayOfYear() / 7) + 1;
-                    weeklyCompleted.put(week, weeklyCompleted.getOrDefault(week, 0) + 1);
+                    int week = (int)((task.getTaskDate().toEpochDay() - startOfYear.toEpochDay()) / 7) + 1;
+                    weeklyCompletedData.put(week, weeklyCompletedData.getOrDefault(week, 0) + 1);
                 }
             }
 
-            for (Map.Entry<Integer, Integer> entry : weeklyCompleted.entrySet()) {
+            for (Map.Entry<Integer, Integer> entry : weeklyCompletedData.entrySet()) {
                 dataset.addValue(entry.getValue(), "Completed", "Week " + entry.getKey());
             }
         }
@@ -494,23 +516,216 @@ public class GitHubProgressFrame extends JPanel {
         JFreeChart chart = ChartFactory.createBarChart(
                 "", "Week", "Tasks Completed",
                 dataset, PlotOrientation.VERTICAL, true, true, false);
+
         chart.setBackgroundPaint(Color.WHITE);
         CategoryPlot plot = chart.getCategoryPlot();
         plot.setBackgroundPaint(Color.WHITE);
         plot.setRangeGridlinePaint(new Color(200, 200, 200));
+        plot.setDomainGridlinePaint(new Color(200, 200, 200));
 
-        BarRenderer renderer = (BarRenderer) plot.getRenderer();
-        renderer.setSeriesPaint(0, PRIMARY_COLOR);
+        // Custom Bar Renderer with gradient colors
+        BarRenderer renderer = new BarRenderer() {
+            private Color[] gradientColors = {
+                    new Color(79, 70, 229),  // Blue
+                    new Color(34, 197, 94),   // Green
+                    new Color(245, 158, 11),  // Orange
+                    new Color(239, 68, 68)    // Red
+            };
+
+            @Override
+            public Paint getItemPaint(int row, int column) {
+                return gradientColors[column % gradientColors.length];
+            }
+        };
+
         renderer.setShadowVisible(false);
+        renderer.setDrawBarOutline(false);
+        renderer.setMaximumBarWidth(0.15);
+        renderer.setDefaultItemLabelGenerator(new org.jfree.chart.labels.StandardCategoryItemLabelGenerator());
+        renderer.setDefaultItemLabelsVisible(true);
+        renderer.setDefaultItemLabelFont(new Font("Segoe UI", Font.BOLD, 11));
+        renderer.setDefaultItemLabelPaint(new Color(51, 51, 51));
+
+        plot.setRenderer(renderer);
 
         ChartPanel chartPanel = new ChartPanel(chart);
         chartPanel.setPreferredSize(new Dimension(900, 300));
         chartPanel.setBorder(null);
 
-        panel.add(titleLabel, BorderLayout.NORTH);
+        // Add tooltip support for bar chart using ChartPanel's tooltip
+        chartPanel.setToolTipText("");
+        chartPanel.addChartMouseListener(new org.jfree.chart.ChartMouseListener() {
+            @Override
+            public void chartMouseClicked(org.jfree.chart.ChartMouseEvent event) {}
+
+            @Override
+            public void chartMouseMoved(org.jfree.chart.ChartMouseEvent event) {
+                org.jfree.chart.entity.ChartEntity entity = event.getEntity();
+                if (entity instanceof org.jfree.chart.entity.CategoryItemEntity) {
+                    org.jfree.chart.entity.CategoryItemEntity item = (org.jfree.chart.entity.CategoryItemEntity) entity;
+                    Comparable week = item.getColumnKey();
+                    Number value = item.getDataset().getValue(item.getRowKey(), item.getColumnKey());
+                    if (value != null) {
+                        chartPanel.setToolTipText("<html><body style='width:200px; padding:5px;'>" +
+                                "<b>Week:</b> " + week.toString() + "<br>" +
+                                "<b>Tasks Completed:</b> " + value.intValue() + "<br>" +
+                                "<b>Contribution:</b> " + value.intValue() + " task(s) completed</body></html>");
+                    }
+                } else {
+                    chartPanel.setToolTipText(null);
+                }
+            }
+        });
+
         panel.add(chartPanel, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    private void exportDataToCSV() {
+        try {
+            Integer activePlanId = user.getActivePlanId();
+            if (activePlanId == null) {
+                JOptionPane.showMessageDialog(this, "No active plan selected. Please activate a plan first.", "No Data", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+            if (tasks.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No tasks found for the active plan.", "No Data", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Open file chooser for user to select save location
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Save CSV Report");
+            fileChooser.setSelectedFile(new File("study_progress_report_" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".csv"));
+
+            int userSelection = fileChooser.showSaveDialog(this);
+            if (userSelection != JFileChooser.APPROVE_OPTION) {
+                return; // User cancelled
+            }
+
+            String filePath = fileChooser.getSelectedFile().getAbsolutePath();
+            if (!filePath.endsWith(".csv")) {
+                filePath += ".csv";
+            }
+
+            // Create CSV content
+            StringBuilder csvContent = new StringBuilder();
+
+            // Sheet 1: Daily Progress Data
+            csvContent.append("DAILY PROGRESS DATA\n");
+            csvContent.append("Date,Tasks Completed\n");
+
+            Map<LocalDate, Integer> dailyCompleted = new TreeMap<>();
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    dailyCompleted.put(task.getTaskDate(),
+                            dailyCompleted.getOrDefault(task.getTaskDate(), 0) + 1);
+                }
+            }
+
+            LocalDate today = LocalDate.now();
+            for (int i = 6; i >= 0; i--) {
+                LocalDate date = today.minusDays(i);
+                int completed = dailyCompleted.getOrDefault(date, 0);
+                csvContent.append(date).append(",").append(completed).append("\n");
+            }
+
+            csvContent.append("\n");
+
+            // Sheet 2: Weekly Summary Data
+            csvContent.append("WEEKLY SUMMARY DATA\n");
+            csvContent.append("Week,Tasks Completed\n");
+
+            LocalDate minDate = LocalDate.now();
+            LocalDate maxDate = LocalDate.now().minusDays(1);
+            for (StudyTask task : tasks) {
+                if (task.getTaskDate().isBefore(minDate)) minDate = task.getTaskDate();
+                if (task.getTaskDate().isAfter(maxDate)) maxDate = task.getTaskDate();
+            }
+
+            LocalDate startOfYear = LocalDate.of(minDate.getYear(), 1, 1);
+            Map<Integer, Integer> weeklyCompleted = new TreeMap<>();
+
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    int week = (int)((task.getTaskDate().toEpochDay() - startOfYear.toEpochDay()) / 7) + 1;
+                    weeklyCompleted.put(week, weeklyCompleted.getOrDefault(week, 0) + 1);
+                }
+            }
+
+            for (Map.Entry<Integer, Integer> entry : weeklyCompleted.entrySet()) {
+                csvContent.append("Week ").append(entry.getKey()).append(",").append(entry.getValue()).append("\n");
+            }
+
+            csvContent.append("\n");
+
+            // Sheet 3: Task Status Distribution
+            csvContent.append("TASK STATUS DISTRIBUTION\n");
+            csvContent.append("Status,Count\n");
+
+            int completed = 0, pending = 0, missed = 0;
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) completed++;
+                else if ("MISSED".equals(task.getStatus())) missed++;
+                else pending++;
+            }
+
+            csvContent.append("Completed,").append(completed).append("\n");
+            csvContent.append("Pending,").append(pending).append("\n");
+            csvContent.append("Missed,").append(missed).append("\n");
+
+            csvContent.append("\n");
+
+            // Sheet 4: Overall Stats
+            csvContent.append("OVERALL STATISTICS\n");
+            csvContent.append("Metric,Value\n");
+            csvContent.append("Total Tasks,").append(tasks.size()).append("\n");
+            csvContent.append("Completed Tasks,").append(completed).append("\n");
+            csvContent.append("Pending Tasks,").append(pending).append("\n");
+            csvContent.append("Missed Tasks,").append(missed).append("\n");
+
+            int progress = tasks.size() > 0 ? (completed * 100 / tasks.size()) : 0;
+            csvContent.append("Overall Progress (%),").append(progress).append("\n");
+
+            // Calculate streak
+            int streak = 0;
+            LocalDate checkDate = LocalDate.now().minusDays(1);
+            while (true) {
+                final LocalDate currentDate = checkDate;
+                boolean hasCompletion = tasks.stream()
+                        .anyMatch(t -> "COMPLETED".equals(t.getStatus()) && t.getTaskDate().equals(currentDate));
+                if (hasCompletion) {
+                    streak++;
+                    checkDate = checkDate.minusDays(1);
+                } else {
+                    break;
+                }
+            }
+            csvContent.append("Current Streak (days),").append(streak).append("\n");
+
+            // Save file
+            java.io.FileWriter fileWriter = new java.io.FileWriter(filePath);
+            fileWriter.write(csvContent.toString());
+            fileWriter.close();
+
+            // Ask user if they want to open the file
+            int openFile = JOptionPane.showConfirmDialog(this,
+                    "✅ Report exported successfully!\n\nFile saved to:\n" + filePath + "\n\nDo you want to open the file?",
+                    "Export Complete",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (openFile == JOptionPane.YES_OPTION) {
+                // Open the file with default application (Excel)
+                Desktop.getDesktop().open(new File(filePath));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error exporting data: " + e.getMessage(), "Export Failed", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void loadProgressData() {
@@ -536,7 +751,6 @@ public class GitHubProgressFrame extends JPanel {
             return;
         }
 
-        // Set active plan name
         String displayName = activePlan.getPlanName();
         if (displayName == null || displayName.isEmpty()) {
             displayName = activePlan.getRepositoryName();
@@ -568,7 +782,6 @@ public class GitHubProgressFrame extends JPanel {
 
         int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
 
-        // Calculate streak
         LocalDate today = LocalDate.now();
         for (int i = 0; i < 30; i++) {
             LocalDate checkDate = today.minusDays(i);
@@ -612,7 +825,6 @@ public class GitHubProgressFrame extends JPanel {
     }
 
     private void updateCharts() {
-        // Remove old charts panel and recreate with new data
         if (chartsPanel != null) {
             mainContentPanel.remove(chartsPanel);
         }
