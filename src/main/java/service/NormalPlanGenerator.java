@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 public class NormalPlanGenerator implements PlanStrategyService {
 
@@ -66,10 +67,16 @@ public class NormalPlanGenerator implements PlanStrategyService {
         weightCalculator.calculateWeights(topics);
 
         LocalDate today = LocalDate.now();
-        long daysRemaining = ChronoUnit.DAYS.between(today, plan.getDeadline());
+        // Include the deadline day itself
+        long daysRemainingLong = ChronoUnit.DAYS.between(today, plan.getDeadline()) + 1;
+        int daysRemaining = (int) daysRemainingLong; // Convert to int safely
+
+        System.out.println("Today: " + today);
+        System.out.println("Deadline: " + plan.getDeadline());
+        System.out.println("Days remaining (including deadline): " + daysRemaining);
 
         if (daysRemaining <= 0) {
-            System.out.println("Deadline passed!");
+            System.out.println("Deadline passed or is today!");
             return tasks;
         }
 
@@ -78,34 +85,46 @@ public class NormalPlanGenerator implements PlanStrategyService {
 
         Map<Integer, Double> hoursPerTopic = weightCalculator.distributeHours(topics, totalHours);
 
+        // For each topic, generate tasks spread across the available days
         for (Topic topic : topics) {
             double topicHours = hoursPerTopic.get(topic.getId());
             int sessionCount = (int) Math.ceil(topicHours);
             if (sessionCount <= 0) sessionCount = 1;
 
-            System.out.println("Topic: " + topic.getName() + " - Sessions: " + sessionCount);
+            System.out.println("Topic: " + topic.getName() + " - Hours: " + topicHours + " - Sessions: " + sessionCount);
 
-            long interval = daysRemaining / sessionCount;
-            if (interval < 1) interval = 1;
-
+            // Calculate session types distribution
             int learnCount = (int) Math.ceil(sessionCount * 0.3);
             int practiceCount = (int) Math.ceil(sessionCount * 0.4);
             int reviewCount = sessionCount - learnCount - practiceCount;
 
-            int sessionIndex = 0;
-            for (int dayOffset = 0; dayOffset < daysRemaining && sessionIndex < sessionCount; dayOffset += interval) {
-                if (dayOffset >= daysRemaining) break;
-                LocalDate taskDate = today.plusDays(dayOffset);
+            // Create a list of all available dates
+            List<LocalDate> availableDates = new ArrayList<>();
+            for (int i = 0; i < daysRemaining; i++) {
+                availableDates.add(today.plusDays(i));
+            }
+
+            // Distribute sessions evenly across available dates
+            // This ensures tasks are spread across the entire period, not bunched up
+            for (int i = 0; i < sessionCount; i++) {
+                // Calculate which date index this session should go to
+                int dateIndex = (int) ((long) i * daysRemaining / sessionCount);
+                if (dateIndex >= daysRemaining) dateIndex = daysRemaining - 1;
+
+                LocalDate taskDate = availableDates.get(dateIndex);
+
+                // Determine session type
                 String sessionType;
-                if (sessionIndex < learnCount) {
+                if (i < learnCount) {
                     sessionType = "LEARN";
-                } else if (sessionIndex < learnCount + practiceCount) {
+                } else if (i < learnCount + practiceCount) {
                     sessionType = "PRACTICE";
                 } else {
                     sessionType = "REVIEW";
                 }
 
                 String description = String.format("%s: %s", topic.getName(), sessionType.toLowerCase());
+
                 StudyTask task = new StudyTask(
                         plan.getId(),
                         taskDate,
@@ -115,11 +134,20 @@ public class NormalPlanGenerator implements PlanStrategyService {
                         sessionType
                 );
                 tasks.add(task);
-                sessionIndex++;
             }
         }
 
         System.out.println("Generated " + tasks.size() + " tasks from topics.");
+
+        // Print distribution by date for verification
+        Map<LocalDate, Integer> dateDistribution = new HashMap<>();
+        for (StudyTask task : tasks) {
+            dateDistribution.put(task.getTaskDate(), dateDistribution.getOrDefault(task.getTaskDate(), 0) + 1);
+        }
+        System.out.println("Task distribution by date:");
+        for (Map.Entry<LocalDate, Integer> entry : dateDistribution.entrySet()) {
+            System.out.println("  " + entry.getKey() + ": " + entry.getValue() + " tasks");
+        }
 
         // Save all tasks to database
         if (!tasks.isEmpty()) {
