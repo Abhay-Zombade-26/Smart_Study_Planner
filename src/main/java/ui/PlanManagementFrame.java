@@ -477,6 +477,7 @@ public class PlanManagementFrame extends JDialog {
     }
 
     private void rescheduleMissedTasks() {
+        // Refresh plan data first
         plan = studyPlanDAO.findById(plan.getId());
 
         List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
@@ -489,13 +490,28 @@ public class PlanManagementFrame extends JDialog {
             return;
         }
 
+        // Show current plan info
         long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), plan.getDeadline());
+        int maxTasksPerDay = plan.getDailyHours();
+        int totalCapacity = (int) (daysRemaining * maxTasksPerDay);
+
+        // Calculate current tasks
+        int currentTasks = 0;
+        for (int i = 0; i < daysRemaining; i++) {
+            LocalDate date = LocalDate.now().plusDays(i);
+            currentTasks += studyTaskDAO.findTasksByDate(plan.getId(), date).size();
+        }
+        int availableSlots = totalCapacity - currentTasks;
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "You have " + missedTasks.size() + " missed task(s).\n" +
-                        "Current daily hours: " + plan.getDailyHours() + "\n" +
-                        "Days remaining: " + daysRemaining + "\n\n" +
-                        "These will be distributed evenly across your remaining days.\n" +
+                "📊 Reschedule Summary:\n" +
+                        "• Missed tasks: " + missedTasks.size() + "\n" +
+                        "• Days remaining: " + daysRemaining + "\n" +
+                        "• Max tasks per day: " + maxTasksPerDay + "\n" +
+                        "• Total capacity: " + totalCapacity + " tasks\n" +
+                        "• Current tasks: " + currentTasks + "\n" +
+                        "• Available slots: " + availableSlots + "\n\n" +
+                        "Missed tasks will be distributed across remaining days.\n" +
                         "Continue?",
                 "Reschedule Missed Tasks",
                 JOptionPane.YES_NO_OPTION,
@@ -507,17 +523,8 @@ public class PlanManagementFrame extends JDialog {
         PlanRescheduler.RescheduleResult result = planRescheduler.rescheduleMissedTasks(plan.getId(), missedTasks);
 
         if (result.success) {
-            StringBuilder message = new StringBuilder("✅ " + result.message + "\n\nNew distribution:\n");
-            if (result.newDistribution != null) {
-                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
-                for (Map.Entry<LocalDate, Integer> entry : result.newDistribution.entrySet()) {
-                    message.append("• ").append(entry.getKey().format(fmt))
-                            .append(": ").append(entry.getValue()).append(" tasks\n");
-                }
-            }
-
             JOptionPane.showMessageDialog(this,
-                    message.toString(),
+                    result.message,
                     "Rescheduling Successful",
                     JOptionPane.INFORMATION_MESSAGE);
 
@@ -528,22 +535,10 @@ public class PlanManagementFrame extends JDialog {
                 parentFrame.refreshDashboardFromPlans();
             }
         } else {
-            if (result.message.contains("increase daily hours")) {
-                JOptionPane.showMessageDialog(this,
-                        "❌ " + result.message + "\n\n" +
-                                "To fix this:\n" +
-                                "1. Click 'Update Plan' button\n" +
-                                "2. Increase the 'Hours per Day' value\n" +
-                                "3. Click 'Update Plan' to save\n" +
-                                "4. Try rescheduling again",
-                        "Need More Hours",
-                        JOptionPane.WARNING_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "❌ " + result.message,
-                        "Rescheduling Failed",
-                        JOptionPane.ERROR_MESSAGE);
-            }
+            JOptionPane.showMessageDialog(this,
+                    result.message,
+                    "Rescheduling Failed",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -589,33 +584,15 @@ public class PlanManagementFrame extends JDialog {
                 return;
             }
 
-            LocalDate oldDeadline = plan.getDeadline();
-            int oldHours = plan.getDailyHours();
-
-            System.out.println("\n=== UPDATING PLAN ===");
-            System.out.println("Old Deadline: " + oldDeadline);
-            System.out.println("New Deadline: " + newDeadline);
-            System.out.println("Old Hours: " + oldHours);
-            System.out.println("New Hours: " + newHours);
-
-            // Get all existing tasks
+            // Get completed tasks BEFORE updating (to preserve them)
             List<StudyTask> allTasks = studyTaskDAO.findByGoalId(plan.getId());
-            LocalDate today = LocalDate.now();
-
-            // Separate completed and pending tasks
             List<StudyTask> completedTasks = new ArrayList<>();
-            List<StudyTask> pendingTasks = new ArrayList<>();
-
             for (StudyTask task : allTasks) {
                 if ("COMPLETED".equals(task.getStatus())) {
                     completedTasks.add(task);
-                } else {
-                    pendingTasks.add(task);
                 }
             }
-
-            System.out.println("Completed tasks: " + completedTasks.size());
-            System.out.println("Pending tasks: " + pendingTasks.size());
+            System.out.println("Completed tasks to preserve: " + completedTasks.size());
 
             // Update plan object
             plan.setDeadline(newDeadline);
@@ -623,43 +600,14 @@ public class PlanManagementFrame extends JDialog {
             plan.setDifficulty(difficultyEnum);
             studyPlanDAO.update(plan);
 
-            // Handle tasks based on date and hour changes
-            if (!newDeadline.equals(oldDeadline) || newHours != oldHours) {
-
-                // Delete all pending tasks (completed tasks remain)
-                for (StudyTask task : pendingTasks) {
-                    studyTaskDAO.deleteByGoalId(task.getId());
-                }
-                System.out.println("Deleted " + pendingTasks.size() + " pending tasks");
-
-                // Get topics for generating new tasks
-                List<Topic> topics = topicDAO.findByPlanId(plan.getId());
-
-                if (!topics.isEmpty()) {
-                    // Generate new tasks based on updated plan
-                    List<StudyTask> newTasks = planGenerator.generateTasksFromTopics(plan);
-
-                    if (!newTasks.isEmpty()) {
-                        // Save new tasks
-                        studyTaskDAO.saveAll(newTasks);
-                        System.out.println("Generated " + newTasks.size() + " new tasks for updated plan");
-                    }
-                }
-            }
-
             JOptionPane.showMessageDialog(this,
-                    "Plan updated successfully!\n" +
-                            "Completed tasks preserved: " + completedTasks.size() + "\n" +
-                            "New tasks generated for updated schedule.",
+                    "Plan updated successfully!\nCompleted tasks preserved: " + completedTasks.size(),
                     "Success",
                     JOptionPane.INFORMATION_MESSAGE);
 
-            // Refresh UI
             loadPlanData();
-            loadTasks();
             checkMissedTasks();
 
-            // Refresh parent
             if (parentFrame != null) {
                 parentFrame.refreshDashboardFromPlans();
                 parentFrame.refreshStudyPlan();
