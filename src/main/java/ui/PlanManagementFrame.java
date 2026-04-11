@@ -361,16 +361,20 @@ public class PlanManagementFrame extends JDialog {
         } else {
             for (StudyTask task : tasks) {
                 String status;
-                if ("COMPLETED".equals(task.getStatus())) {
+                String statusText = task.getStatus();
+
+                if ("COMPLETED".equals(statusText)) {
                     status = "✅ Completed";
                     completed++;
-                } else if (task.getTaskDate().isBefore(today) && !"COMPLETED".equals(task.getStatus())) {
+                } else if ("RESCHEDULED".equals(statusText)) {
+                    status = "🔄 Rescheduled";
+                } else if (task.getTaskDate().isBefore(today) && !"COMPLETED".equals(statusText) && !"RESCHEDULED".equals(statusText)) {
                     status = "❌ Missed";
                 } else {
                     status = "⏳ Pending";
                 }
 
-                System.out.println("  Task: " + task.getTaskDate() + " - " + task.getDescription());
+                System.out.println("  Task: " + task.getTaskDate() + " - " + task.getDescription() + " [" + statusText + "]");
 
                 tableModel.addRow(new Object[]{
                         task.getTaskDate().format(fmt),
@@ -381,9 +385,18 @@ public class PlanManagementFrame extends JDialog {
         }
 
         int total = tasks.size();
+        int pendingAndRescheduled = 0;
+        for (StudyTask task : tasks) {
+            String s = task.getStatus();
+            if (!"COMPLETED".equals(s) && !"RESCHEDULED".equals(s)) {
+                pendingAndRescheduled++;
+            }
+        }
+
         int progress = total > 0 ? (completed * 100 / total) : 0;
         statsLabel.setText(completed + "/" + total + " (" + progress + "%)");
-        System.out.println("Total tasks: " + total + ", Completed: " + completed);
+
+        System.out.println("Total tasks: " + total + ", Completed: " + completed + ", Progress: " + progress + "%");
         System.out.println("=========================");
     }
 
@@ -465,8 +478,20 @@ public class PlanManagementFrame extends JDialog {
     }
 
     private void checkMissedTasks() {
-        List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
-        int missedCount = missedTasks.size();
+        List<StudyTask> allTasks = studyTaskDAO.findByGoalId(plan.getId());
+        LocalDate today = LocalDate.now();
+
+        int missedCount = 0;
+        for (StudyTask task : allTasks) {
+            String status = task.getStatus();
+            // Only count as missed if status is PENDING and date is in past
+            if (!"COMPLETED".equals(status) && !"RESCHEDULED".equals(status)) {
+                if (task.getTaskDate().isBefore(today)) {
+                    missedCount++;
+                }
+            }
+        }
+
         missedTasksLabel.setText(String.valueOf(missedCount));
 
         if (missedCount > 0) {
@@ -474,71 +499,95 @@ public class PlanManagementFrame extends JDialog {
         } else {
             missedTasksLabel.setForeground(SUCCESS_COLOR);
         }
+
+        System.out.println("Missed tasks count: " + missedCount);
     }
 
     private void rescheduleMissedTasks() {
         // Refresh plan data first
         plan = studyPlanDAO.findById(plan.getId());
 
+        if (plan == null) {
+            JOptionPane.showMessageDialog(this, "Plan not found!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         List<StudyTask> missedTasks = studyTaskDAO.findMissedTasks(plan.getId());
 
         if (missedTasks.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "No missed tasks to reschedule! Great job! 🎉",
+                    "🎉 No missed tasks to reschedule! Great job!",
                     "No Missed Tasks",
                     JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
         // Show current plan info
-        long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), plan.getDeadline());
+        long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), plan.getDeadline()) + 1;
         int maxTasksPerDay = plan.getDailyHours();
-        int totalCapacity = (int) (daysRemaining * maxTasksPerDay);
 
-        // Calculate current tasks
-        int currentTasks = 0;
-        for (int i = 0; i < daysRemaining; i++) {
-            LocalDate date = LocalDate.now().plusDays(i);
-            currentTasks += studyTaskDAO.findTasksByDate(plan.getId(), date).size();
-        }
-        int availableSlots = totalCapacity - currentTasks;
+        String message = String.format(
+                "📊 Reschedule Summary:\n\n" +
+                        "• Missed tasks: %d\n" +
+                        "• Days remaining: %d\n" +
+                        "• Max tasks/day: %d\n\n" +
+                        "Missed tasks will be marked as 'Rescheduled' and\n" +
+                        "new copies will be created on future dates.\n\n" +
+                        "Continue?",
+                missedTasks.size(),
+                daysRemaining,
+                maxTasksPerDay
+        );
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "📊 Reschedule Summary:\n" +
-                        "• Missed tasks: " + missedTasks.size() + "\n" +
-                        "• Days remaining: " + daysRemaining + "\n" +
-                        "• Max tasks per day: " + maxTasksPerDay + "\n" +
-                        "• Total capacity: " + totalCapacity + " tasks\n" +
-                        "• Current tasks: " + currentTasks + "\n" +
-                        "• Available slots: " + availableSlots + "\n\n" +
-                        "Missed tasks will be distributed across remaining days.\n" +
-                        "Continue?",
-                "Reschedule Missed Tasks",
+                message,
+                "Reschedule Tasks",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE);
 
         if (confirm != JOptionPane.YES_OPTION) return;
 
-        PlanRescheduler planRescheduler = new PlanRescheduler();
-        PlanRescheduler.RescheduleResult result = planRescheduler.rescheduleMissedTasks(plan.getId(), missedTasks);
+        // Show processing indicator
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-        if (result.success) {
-            JOptionPane.showMessageDialog(this,
-                    result.message,
-                    "Rescheduling Successful",
-                    JOptionPane.INFORMATION_MESSAGE);
+        try {
+            PlanRescheduler planRescheduler = new PlanRescheduler();
+            PlanRescheduler.RescheduleResult result = planRescheduler.rescheduleMissedTasks(plan.getId(), missedTasks);
 
-            loadTasks();
-            checkMissedTasks();
+            if (result.success) {
+                JOptionPane.showMessageDialog(this,
+                        result.message,
+                        "✅ Rescheduling Successful",
+                        JOptionPane.INFORMATION_MESSAGE);
 
-            if (parentFrame != null) {
-                parentFrame.refreshDashboardFromPlans();
+                // CRITICAL: Refresh everything
+                loadPlanData();
+                loadTopics();
+                loadTasks();
+                checkMissedTasks();
+
+                if (parentFrame != null) {
+                    parentFrame.refreshDashboardFromPlans();
+                    parentFrame.refreshStudyPlan();
+                }
+
+                // Force UI repaint
+                repaint();
+                revalidate();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        result.message,
+                        "❌ Rescheduling Failed",
+                        JOptionPane.ERROR_MESSAGE);
             }
-        } else {
+        } catch (Exception e) {
+            e.printStackTrace();
             JOptionPane.showMessageDialog(this,
-                    result.message,
-                    "Rescheduling Failed",
+                    "Error: " + e.getMessage(),
+                    "Error",
                     JOptionPane.ERROR_MESSAGE);
+        } finally {
+            setCursor(Cursor.getDefaultCursor());
         }
     }
 
@@ -584,28 +633,151 @@ public class PlanManagementFrame extends JDialog {
                 return;
             }
 
-            // Get completed tasks BEFORE updating (to preserve them)
+            LocalDate oldDeadline = plan.getDeadline();
+            int oldHours = plan.getDailyHours();
+            String oldDifficulty = plan.getDifficulty();
+
+            // Check if anything actually changed
+            boolean deadlineChanged = !oldDeadline.equals(newDeadline);
+            boolean hoursChanged = oldHours != newHours;
+            boolean difficultyChanged = !oldDifficulty.equals(difficultyEnum);
+
+            if (!deadlineChanged && !hoursChanged && !difficultyChanged) {
+                JOptionPane.showMessageDialog(this, "No changes detected.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            // Get all tasks
             List<StudyTask> allTasks = studyTaskDAO.findByGoalId(plan.getId());
+
+            // Separate completed and pending tasks
             List<StudyTask> completedTasks = new ArrayList<>();
+            List<StudyTask> pendingTasks = new ArrayList<>();
+
             for (StudyTask task : allTasks) {
                 if ("COMPLETED".equals(task.getStatus())) {
                     completedTasks.add(task);
+                } else {
+                    pendingTasks.add(task);
                 }
             }
-            System.out.println("Completed tasks to preserve: " + completedTasks.size());
 
-            // Update plan object
+            System.out.println("\n=== UPDATING PLAN ===");
+            System.out.println("Plan ID: " + plan.getId());
+            System.out.println("Old deadline: " + oldDeadline);
+            System.out.println("New deadline: " + newDeadline);
+            System.out.println("Old hours: " + oldHours);
+            System.out.println("New hours: " + newHours);
+            System.out.println("Completed tasks: " + completedTasks.size());
+            System.out.println("Pending tasks: " + pendingTasks.size());
+
+            // Calculate capacity with new settings
+            long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), newDeadline) + 1;
+            long totalCapacity = daysRemaining * newHours;
+            int totalPendingTasks = pendingTasks.size();
+
+            String message;
+            boolean needReschedule = false;
+
+            if (deadlineChanged || hoursChanged) {
+                // Check if pending tasks fit in new capacity
+                if (totalPendingTasks > totalCapacity) {
+                    int extra = totalPendingTasks - (int) totalCapacity;
+                    int confirm = JOptionPane.showConfirmDialog(this,
+                            String.format("⚠️ Warning: New settings don't have enough capacity!\n\n" +
+                                            "• Pending tasks: %d\n" +
+                                            "• New capacity: %d slots\n" +
+                                            "• Shortage: %d tasks\n\n" +
+                                            "The extra tasks will be scheduled on the last day.\n" +
+                                            "Consider increasing daily hours or extending deadline.\n\n" +
+                                            "Continue anyway?",
+                                    totalPendingTasks, totalCapacity, extra),
+                            "Capacity Warning",
+                            JOptionPane.YES_NO_OPTION,
+                            JOptionPane.WARNING_MESSAGE);
+
+                    if (confirm != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                }
+
+                message = String.format("Plan settings will be updated:\n\n" +
+                                "• Deadline: %s → %s\n" +
+                                "• Daily Hours: %d → %d\n" +
+                                "• Difficulty: %s → %s\n\n" +
+                                "Pending tasks will be rescheduled to fit new settings.\n" +
+                                "✅ Completed tasks (%d) will be preserved.\n\n" +
+                                "Continue?",
+                        oldDeadline, newDeadline,
+                        oldHours, newHours,
+                        oldDifficulty, difficultyEnum,
+                        completedTasks.size());
+                needReschedule = true;
+            } else {
+                message = String.format("Update plan difficulty?\n\n" +
+                                "• Difficulty: %s → %s\n\n" +
+                                "No rescheduling needed.\n" +
+                                "Continue?",
+                        oldDifficulty, difficultyEnum);
+            }
+
+            int confirm = JOptionPane.showConfirmDialog(this, message, "Confirm Update",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+
+            // Update plan in database
             plan.setDeadline(newDeadline);
             plan.setDailyHours(newHours);
             plan.setDifficulty(difficultyEnum);
             studyPlanDAO.update(plan);
 
-            JOptionPane.showMessageDialog(this,
-                    "Plan updated successfully!\nCompleted tasks preserved: " + completedTasks.size(),
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE);
+            // Reschedule pending tasks if deadline or hours changed
+            if (needReschedule && !pendingTasks.isEmpty()) {
+                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
+                try {
+                    // Delete old pending tasks
+                    for (StudyTask task : pendingTasks) {
+                        studyTaskDAO.deleteTaskById(task.getId());
+                    }
+                    System.out.println("Deleted " + pendingTasks.size() + " old pending tasks");
+
+                    // Redistribute pending tasks across new date range
+                    Map<LocalDate, List<StudyTask>> distribution = redistributeTasks(
+                            pendingTasks, LocalDate.now(), (int) daysRemaining, newHours);
+
+                    // Save redistributed tasks
+                    int savedCount = 0;
+                    for (Map.Entry<LocalDate, List<StudyTask>> entry : distribution.entrySet()) {
+                        for (StudyTask task : entry.getValue()) {
+                            task.setTaskDate(entry.getKey());
+                            task.setStatus("PENDING");
+                            studyTaskDAO.save(task);
+                            savedCount++;
+                        }
+                    }
+
+                    System.out.println("✅ Rescheduled " + savedCount + " tasks with new settings");
+                } finally {
+                    setCursor(Cursor.getDefaultCursor());
+                }
+            }
+
+            // Show success message
+            String successMsg = "✅ Plan updated successfully!\n\n";
+            if (needReschedule && !pendingTasks.isEmpty()) {
+                successMsg += String.format("• %d tasks rescheduled\n", pendingTasks.size());
+            }
+            successMsg += String.format("• %d completed tasks preserved", completedTasks.size());
+
+            JOptionPane.showMessageDialog(this, successMsg, "Success", JOptionPane.INFORMATION_MESSAGE);
+
+            // Refresh UI
             loadPlanData();
+            loadTasks();
             checkMissedTasks();
 
             if (parentFrame != null) {
@@ -613,10 +785,75 @@ public class PlanManagementFrame extends JDialog {
                 parentFrame.refreshStudyPlan();
             }
 
+            System.out.println("=== PLAN UPDATE COMPLETE ===\n");
+
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Error updating plan: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    /**
+     * Redistributes tasks evenly across available days
+     */
+    private Map<LocalDate, List<StudyTask>> redistributeTasks(
+            List<StudyTask> tasks, LocalDate startDate, int daysRemaining, int maxPerDay) {
+
+        Map<LocalDate, List<StudyTask>> distribution = new TreeMap<>();
+
+        // Initialize all days with empty lists
+        for (int i = 0; i < daysRemaining; i++) {
+            distribution.put(startDate.plusDays(i), new ArrayList<>());
+        }
+
+        // Sort tasks by original date (oldest first)
+        tasks.sort(Comparator.comparing(StudyTask::getTaskDate));
+
+        // Round-robin distribution
+        int dayIndex = 0;
+        for (StudyTask task : tasks) {
+            // Find next available day that hasn't reached max capacity
+            int attempts = 0;
+            boolean placed = false;
+
+            while (attempts < daysRemaining) {
+                LocalDate date = startDate.plusDays(dayIndex);
+                List<StudyTask> dayTasks = distribution.get(date);
+
+                if (dayTasks.size() < maxPerDay) {
+                    dayTasks.add(task);
+                    placed = true;
+                    break;
+                }
+
+                dayIndex = (dayIndex + 1) % daysRemaining;
+                attempts++;
+            }
+
+            // If all days are full, add to the day with least tasks
+            if (!placed) {
+                LocalDate minDay = distribution.entrySet().stream()
+                        .min(Comparator.comparingInt(e -> e.getValue().size()))
+                        .map(Map.Entry::getKey)
+                        .orElse(startDate.plusDays(daysRemaining - 1));
+                distribution.get(minDay).add(task);
+            }
+
+            dayIndex = (dayIndex + 1) % daysRemaining;
+        }
+
+        // Print distribution for debugging
+        System.out.println("\nNew task distribution:");
+        for (Map.Entry<LocalDate, List<StudyTask>> entry : distribution.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                System.out.println("  " + entry.getKey() + ": " + entry.getValue().size() + " tasks");
+            }
+        }
+
+        return distribution;
     }
 
     private void deletePlan() {
