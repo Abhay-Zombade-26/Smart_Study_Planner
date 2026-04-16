@@ -10,6 +10,11 @@ public class StudyTask {
     private boolean requiredCommit;
     private String status; // PENDING, COMPLETED, MISSED
 
+    // New fields for topic-based planning
+    private int topicId;          // ID of the associated topic (if any)
+    private String sessionType;   // Type of session: "LEARN", "PRACTICE", "REVIEW", "MOCK_TEST"
+
+    // Constructors
     public StudyTask() {}
 
     public StudyTask(int goalId, LocalDate taskDate, String description, boolean requiredCommit) {
@@ -18,6 +23,14 @@ public class StudyTask {
         this.description = description;
         this.requiredCommit = requiredCommit;
         this.status = "PENDING";
+    }
+
+    // Constructor with topicId and sessionType
+    public StudyTask(int goalId, LocalDate taskDate, String description, boolean requiredCommit,
+                     int topicId, String sessionType) {
+        this(goalId, taskDate, description, requiredCommit);
+        this.topicId = topicId;
+        this.sessionType = sessionType;
     }
 
     // Getters and Setters
@@ -38,4 +51,10 @@ public class StudyTask {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public int getTopicId() { return topicId; }
+    public void setTopicId(int topicId) { this.topicId = topicId; }
+
+    public String getSessionType() { return sessionType; }
+    public void setSessionType(String sessionType) { this.sessionType = sessionType; }
 }

@@ -6,23 +6,17 @@ import model.User;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.geom.Ellipse2D;
-import java.awt.image.BufferedImage;
-import java.net.URL;
-import javax.imageio.ImageIO;
 
 public class ProfileFrame extends JPanel {
 
     private User user;
     private UserDAO userDAO;
-    private JLabel avatarLabel;
-    
+
     public ProfileFrame(User user) {
         this.user = user;
         this.userDAO = new UserDAO();
 
         initUI();
-        loadAvatar();
     }
 
     private void initUI() {
@@ -35,7 +29,7 @@ public class ProfileFrame extends JPanel {
         headerPanel.setBackground(Color.WHITE);
         headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
 
-        JLabel titleLabel = new JLabel("Profile Settings");
+        JLabel titleLabel = new JLabel("👤 Profile Settings");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(new Color(33, 33, 33));
 
@@ -83,15 +77,11 @@ public class ProfileFrame extends JPanel {
                 new EmptyBorder(30, 30, 30, 30)
         ));
 
-        avatarLabel = new JLabel();
-        avatarLabel.setPreferredSize(new Dimension(100, 100));
-        avatarLabel.setMaximumSize(new Dimension(100, 100));
-        avatarLabel.setMinimumSize(new Dimension(100, 100));
+        // Avatar placeholder
+        JLabel avatarLabel = new JLabel("👤");
+        avatarLabel.setFont(new Font("Segoe UI", Font.PLAIN, 64));
+        avatarLabel.setForeground(new Color(100, 116, 139));
         avatarLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        avatarLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        avatarLabel.setVerticalAlignment(SwingConstants.CENTER);
-        
-        setDefaultAvatar();
 
         JLabel nameLabel = new JLabel(user.getName());
         nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
@@ -111,7 +101,6 @@ public class ProfileFrame extends JPanel {
         changeAvatarBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         changeAvatarBtn.setMaximumSize(new Dimension(150, 35));
         changeAvatarBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        changeAvatarBtn.addActionListener(e -> loadAvatar());
 
         panel.add(avatarLabel);
         panel.add(Box.createVerticalStrut(15));
@@ -122,80 +111,6 @@ public class ProfileFrame extends JPanel {
         panel.add(changeAvatarBtn);
 
         return panel;
-    }
-
-    private void setDefaultAvatar() {
-        String initial = user.getName().substring(0, 1).toUpperCase();
-        ImageIcon defaultIcon = createDefaultAvatar(initial, 100);
-        avatarLabel.setIcon(defaultIcon);
-    }
-
-    private ImageIcon createDefaultAvatar(String text, int size) {
-        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = image.createGraphics();
-        
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(new Color(52, 152, 219));
-        g2.fillOval(0, 0, size, size);
-        
-        g2.setColor(Color.WHITE);
-        g2.setFont(new Font("Segoe UI", Font.BOLD, size/2));
-        FontMetrics fm = g2.getFontMetrics();
-        int textWidth = fm.stringWidth(text);
-        int textHeight = fm.getAscent();
-        g2.drawString(text, (size - textWidth)/2, (size + textHeight)/2 - 5);
-        
-        g2.dispose();
-        
-        return new ImageIcon(image);
-    }
-
-    private void loadAvatar() {
-        String avatarUrl = user.getAvatarUrl();
-        if (avatarUrl != null && !avatarUrl.isEmpty()) {
-            SwingWorker<ImageIcon, Void> worker = new SwingWorker<>() {
-                @Override
-                protected ImageIcon doInBackground() {
-                    try {
-                        URL url = new URL(avatarUrl);
-                        BufferedImage original = ImageIO.read(url);
-                        
-                        Image resized = original.getScaledInstance(100, 100, Image.SCALE_SMOOTH);
-                        BufferedImage buffered = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
-                        Graphics2D g2 = buffered.createGraphics();
-                        
-                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                        Ellipse2D.Double circle = new Ellipse2D.Double(0, 0, 100, 100);
-                        g2.setClip(circle);
-                        g2.drawImage(resized, 0, 0, 100, 100, null);
-                        g2.dispose();
-                        
-                        return new ImageIcon(buffered);
-                        
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return null;
-                    }
-                }
-                
-                @Override
-                protected void done() {
-                    try {
-                        ImageIcon icon = get();
-                        if (icon != null) {
-                            avatarLabel.setIcon(icon);
-                        } else {
-                            setDefaultAvatar();
-                        }
-                    } catch (Exception e) {
-                        setDefaultAvatar();
-                    }
-                }
-            };
-            worker.execute();
-        } else {
-            setDefaultAvatar();
-        }
     }
 
     private JPanel createProfileForm() {
@@ -210,6 +125,7 @@ public class ProfileFrame extends JPanel {
         gbc.insets = new Insets(10, 10, 10, 10);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
+        // Title
         JLabel titleLabel = new JLabel("Profile Information");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         titleLabel.setForeground(new Color(33, 33, 33));
@@ -218,6 +134,7 @@ public class ProfileFrame extends JPanel {
         gbc.gridwidth = 2;
         panel.add(titleLabel, gbc);
 
+        // Name field
         gbc.gridwidth = 1;
         gbc.gridy = 1;
         gbc.gridx = 0;
@@ -231,6 +148,7 @@ public class ProfileFrame extends JPanel {
         nameField.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
         panel.add(nameField, gbc);
 
+        // Email field
         gbc.gridy = 2;
         gbc.gridx = 0;
         JLabel emailLabel = new JLabel("Email");
@@ -245,6 +163,7 @@ public class ProfileFrame extends JPanel {
         emailField.setBackground(new Color(248, 250, 252));
         panel.add(emailField, gbc);
 
+        // GitHub username (if IT student)
         if (user.getGithubUsername() != null) {
             gbc.gridy = 3;
             gbc.gridx = 0;
@@ -261,6 +180,7 @@ public class ProfileFrame extends JPanel {
             panel.add(githubField, gbc);
         }
 
+        // Save button
         gbc.gridy = 4;
         gbc.gridx = 1;
         gbc.anchor = GridBagConstraints.EAST;
@@ -274,18 +194,9 @@ public class ProfileFrame extends JPanel {
         saveBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         saveBtn.addActionListener(e -> {
-            String newName = nameField.getText().trim();
-            if (!newName.isEmpty()) {
-                user.setName(newName);
-                boolean updated = userDAO.update(user);
-                if (updated) {
-                    JOptionPane.showMessageDialog(this, "Profile updated successfully!");
-                } else {
-                    JOptionPane.showMessageDialog(this, "Failed to update profile.", "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Name cannot be empty.", "Validation Error", JOptionPane.WARNING_MESSAGE);
-            }
+            user.setName(nameField.getText());
+            userDAO.update(user);
+            JOptionPane.showMessageDialog(this, "Profile updated successfully!");
         });
 
         panel.add(saveBtn, gbc);
@@ -353,7 +264,7 @@ public class ProfileFrame extends JPanel {
         gbc.insets = new Insets(10, 10, 10, 10);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        JLabel titleLabel = new JLabel("Danger Zone");
+        JLabel titleLabel = new JLabel("⚠️ Danger Zone");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         titleLabel.setForeground(new Color(220, 38, 38));
         gbc.gridx = 0;
@@ -388,6 +299,7 @@ public class ProfileFrame extends JPanel {
             );
 
             if (confirm == JOptionPane.YES_OPTION) {
+                // Delete account logic here
                 JOptionPane.showMessageDialog(this, "Account deleted successfully.");
                 new LoginFrame().setVisible(true);
                 SwingUtilities.getWindowAncestor(this).dispose();

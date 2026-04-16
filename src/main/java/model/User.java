@@ -11,6 +11,7 @@ public class User {
     private String githubUsername;
     private String accessToken;
     private String avatarUrl;
+    private Integer activePlanId;          // ID of the currently active study plan
 
     public User() {}
 
@@ -47,6 +48,9 @@ public class User {
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 
+    public Integer getActivePlanId() { return activePlanId; }
+    public void setActivePlanId(Integer activePlanId) { this.activePlanId = activePlanId; }
+
     @Override
     public String toString() {
         return "User{" +
@@ -55,6 +59,7 @@ public class User {
                 ", email='" + email + '\'' +
                 ", role=" + role +
                 ", githubUsername='" + githubUsername + '\'' +
+                ", activePlanId=" + activePlanId +
                 '}';
     }
 }
