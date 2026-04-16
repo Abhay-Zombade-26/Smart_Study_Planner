@@ -24,6 +24,15 @@ public class AddTopicDialog extends JDialog {
         super(owner, "Add New Topic", true);
         this.planId = planId;
         this.subjects = subjects;
+
+        // Debug print
+        System.out.println("AddTopicDialog created with " + (subjects != null ? subjects.length : 0) + " subjects:");
+        if (subjects != null) {
+            for (String s : subjects) {
+                System.out.println("  - " + s);
+            }
+        }
+
         initUI();
         setLocationRelativeTo(owner);
     }
@@ -44,7 +53,14 @@ public class AddTopicDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 0;
         formPanel.add(new JLabel("Subject:"), gbc);
         gbc.gridx = 1;
-        subjectCombo = new JComboBox<>(subjects);
+
+        // Check if subjects array is valid
+        if (subjects == null || subjects.length == 0 || (subjects.length == 1 && (subjects[0] == null || subjects[0].isEmpty()))) {
+            subjectCombo = new JComboBox<>(new String[]{"General"});
+            subjectCombo.setEnabled(false);
+        } else {
+            subjectCombo = new JComboBox<>(subjects);
+        }
         subjectCombo.setSelectedIndex(0);
         formPanel.add(subjectCombo, gbc);
 
@@ -60,14 +76,14 @@ public class AddTopicDialog extends JDialog {
         formPanel.add(new JLabel("Difficulty (1-5):"), gbc);
         gbc.gridx = 1;
         difficultyCombo = new JComboBox<>(new Integer[]{1,2,3,4,5});
-        difficultyCombo.setSelectedIndex(2); // default 3
+        difficultyCombo.setSelectedIndex(2);
         formPanel.add(difficultyCombo, gbc);
 
         // Size
         gbc.gridx = 0; gbc.gridy = 3;
         formPanel.add(new JLabel("Size (subtopics/hours):"), gbc);
         gbc.gridx = 1;
-        sizeField = new JTextField(15);
+        sizeField = new JTextField("1", 15);
         formPanel.add(sizeField, gbc);
 
         add(formPanel, BorderLayout.CENTER);
@@ -109,12 +125,17 @@ public class AddTopicDialog extends JDialog {
 
         int size;
         try {
-            size = Integer.parseInt(sizeField.getText().trim());
+            String sizeText = sizeField.getText().trim();
+            if (sizeText.isEmpty()) sizeText = "1";
+            size = Integer.parseInt(sizeText);
             if (size <= 0) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Size must be a positive integer.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        System.out.println("Adding topic: Subject=" + subject + ", Name=" + name +
+                ", Difficulty=" + difficulty + ", Size=" + size + ", PlanId=" + planId);
 
         // Create Topic object with subject
         Topic topic = new Topic(planId, subject, name, difficulty, size);
@@ -125,9 +146,10 @@ public class AddTopicDialog extends JDialog {
         if (saved != null) {
             addedTopic = saved;
             succeeded = true;
+            JOptionPane.showMessageDialog(this, "Topic added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             dispose();
         } else {
-            JOptionPane.showMessageDialog(this, "Failed to save topic to database.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Failed to save topic to database.\nPlease check database connection.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

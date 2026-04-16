@@ -16,15 +16,15 @@ public class GoogleAuthService implements AuthService {
 
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final String GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+    private static final String REDIRECT_URI = "http://localhost:8888/google-callback";
 
     @Override
     public String getAuthorizationUrl() {
         String clientId = AppConfig.GOOGLE_CLIENT_ID.trim();
-        String redirectUri = AppConfig.GOOGLE_REDIRECT_URI;
 
         String url = "https://accounts.google.com/o/oauth2/v2/auth?" +
                 "client_id=" + clientId +
-                "&redirect_uri=" + redirectUri +
+                "&redirect_uri=" + REDIRECT_URI +
                 "&response_type=code" +
                 "&scope=openid%20email%20profile" +
                 "&access_type=offline" +
@@ -42,7 +42,7 @@ public class GoogleAuthService implements AuthService {
             System.out.println("\n=== GOOGLE AUTH DEBUG ===");
             System.out.println("1. Auth Code received: " + authCode);
             System.out.println("2. Client ID: " + maskString(AppConfig.GOOGLE_CLIENT_ID));
-            System.out.println("3. Redirect URI: " + AppConfig.GOOGLE_REDIRECT_URI);
+            System.out.println("3. Redirect URI: " + REDIRECT_URI);
 
             String accessToken = exchangeCodeForToken(authCode);
             System.out.println("4. ✅ Token received successfully!");
@@ -66,7 +66,7 @@ public class GoogleAuthService implements AuthService {
         params.put("code", code);
         params.put("client_id", AppConfig.GOOGLE_CLIENT_ID.trim());
         params.put("client_secret", AppConfig.GOOGLE_CLIENT_SECRET.trim());
-        params.put("redirect_uri", AppConfig.GOOGLE_REDIRECT_URI);
+        params.put("redirect_uri", REDIRECT_URI);
         params.put("grant_type", "authorization_code");
 
         Map<String, String> headers = new HashMap<>();
@@ -145,5 +145,3 @@ public class GoogleAuthService implements AuthService {
         }
     }
 }
-//closing the last curly brases
-

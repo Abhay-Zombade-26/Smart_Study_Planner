@@ -11,20 +11,24 @@ import java.util.List;
 public class StudyPlanDAO {
 
     public StudyPlan save(StudyPlan plan) {
-        String sql = "INSERT INTO goals (user_id, repository_name, subject_name, subjects, deadline, difficulty, daily_hours, completion_percentage) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO goals (user_id, plan_name, repository_name, subject_name, subjects, end_date, experience_level, daily_hours, completion_percentage, ai_generated, role, login_type) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             stmt.setInt(1, plan.getUserId());
-            stmt.setString(2, plan.getRepositoryName());
-            stmt.setString(3, plan.getSubjectName());
-            stmt.setString(4, plan.getSubjects());
-            stmt.setDate(5, Date.valueOf(plan.getDeadline()));
-            stmt.setString(6, plan.getDifficulty());
-            stmt.setInt(7, plan.getDailyHours());
-            stmt.setInt(8, plan.getCompletionPercentage());
+            stmt.setString(2, plan.getPlanName());
+            stmt.setString(3, plan.getRepositoryName());
+            stmt.setString(4, plan.getSubjectName());
+            stmt.setString(5, plan.getSubjects());
+            stmt.setDate(6, Date.valueOf(plan.getDeadline()));
+            stmt.setString(7, plan.getDifficulty());
+            stmt.setInt(8, plan.getDailyHours());
+            stmt.setInt(9, plan.getCompletionPercentage());
+            stmt.setBoolean(10, plan.isAiGenerated());
+            stmt.setString(11, plan.getRole() != null ? plan.getRole() : "NORMAL");
+            stmt.setString(12, plan.getLoginType() != null ? plan.getLoginType() : "GOOGLE");
 
             int affectedRows = stmt.executeUpdate();
             System.out.println("StudyPlanDAO.save: affectedRows = " + affectedRows);
@@ -38,6 +42,7 @@ public class StudyPlanDAO {
                 plan.setId(rs.getInt(1));
                 System.out.println("Generated plan ID: " + plan.getId());
             }
+            rs.close();
 
             return plan;
         } catch (SQLException e) {
@@ -57,8 +62,11 @@ public class StudyPlanDAO {
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
-                return mapResultSetToStudyPlan(rs);
+                StudyPlan plan = mapResultSetToStudyPlan(rs);
+                rs.close();
+                return plan;
             }
+            rs.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -66,6 +74,32 @@ public class StudyPlanDAO {
         return null;
     }
 
+    public List<StudyPlan> findByUserIdAndRole(int userId, String role, String loginType) {
+        List<StudyPlan> plans = new ArrayList<>();
+        String sql = "SELECT * FROM goals WHERE user_id = ? AND role = ? AND login_type = ? ORDER BY created_at DESC";
+
+        try (Connection conn = DBConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, userId);
+            stmt.setString(2, role);
+            stmt.setString(3, loginType);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                plans.add(mapResultSetToStudyPlan(rs));
+            }
+            rs.close();
+
+            System.out.println("Total " + role + " plans found for user " + userId + ": " + plans.size());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return plans;
+    }
+
+    @Deprecated
     public List<StudyPlan> findByUserId(int userId) {
         List<StudyPlan> plans = new ArrayList<>();
         String sql = "SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC";
@@ -78,8 +112,8 @@ public class StudyPlanDAO {
 
             while (rs.next()) {
                 plans.add(mapResultSetToStudyPlan(rs));
-                System.out.println("Found plan with ID: " + rs.getInt("id") + ", deadline: " + rs.getDate("deadline"));
             }
+            rs.close();
 
             System.out.println("Total plans found for user " + userId + ": " + plans.size());
         } catch (SQLException e) {
@@ -89,20 +123,21 @@ public class StudyPlanDAO {
         return plans;
     }
 
-    // ✅ Update an existing plan
     public boolean update(StudyPlan plan) {
-        String sql = "UPDATE goals SET subject_name = ?, subjects = ?, deadline = ?, difficulty = ?, daily_hours = ?, completion_percentage = ? WHERE id = ?";
+        String sql = "UPDATE goals SET plan_name = ?, subject_name = ?, subjects = ?, end_date = ?, experience_level = ?, daily_hours = ?, completion_percentage = ?, ai_generated = ? WHERE id = ?";
 
         try (Connection conn = DBConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, plan.getSubjectName());
-            stmt.setString(2, plan.getSubjects());
-            stmt.setDate(3, Date.valueOf(plan.getDeadline()));
-            stmt.setString(4, plan.getDifficulty());
-            stmt.setInt(5, plan.getDailyHours());
-            stmt.setInt(6, plan.getCompletionPercentage());
-            stmt.setInt(7, plan.getId());
+            stmt.setString(1, plan.getPlanName());
+            stmt.setString(2, plan.getSubjectName());
+            stmt.setString(3, plan.getSubjects());
+            stmt.setDate(4, Date.valueOf(plan.getDeadline()));
+            stmt.setString(5, plan.getDifficulty());
+            stmt.setInt(6, plan.getDailyHours());
+            stmt.setInt(7, plan.getCompletionPercentage());
+            stmt.setBoolean(8, plan.isAiGenerated());
+            stmt.setInt(9, plan.getId());
 
             int affectedRows = stmt.executeUpdate();
             System.out.println("StudyPlanDAO.update: affectedRows = " + affectedRows);
@@ -114,7 +149,6 @@ public class StudyPlanDAO {
         }
     }
 
-    // ✅ Delete a plan by ID
     public boolean deleteById(int planId) {
         String sql = "DELETE FROM goals WHERE id = ?";
 
@@ -150,13 +184,59 @@ public class StudyPlanDAO {
         StudyPlan plan = new StudyPlan();
         plan.setId(rs.getInt("id"));
         plan.setUserId(rs.getInt("user_id"));
-        plan.setRepositoryName(rs.getString("repository_name"));
-        plan.setSubjectName(rs.getString("subject_name"));
-        plan.setSubjects(rs.getString("subjects"));
-        plan.setDeadline(rs.getDate("deadline").toLocalDate());
-        plan.setDifficulty(rs.getString("difficulty"));
+
+        try {
+            plan.setPlanName(rs.getString("plan_name"));
+        } catch (SQLException e) {
+            plan.setPlanName(null);
+        }
+
+        try {
+            plan.setRepositoryName(rs.getString("repository_name"));
+        } catch (SQLException e) {
+            plan.setRepositoryName(null);
+        }
+
+        try {
+            plan.setSubjectName(rs.getString("subject_name"));
+        } catch (SQLException e) {
+            plan.setSubjectName(null);
+        }
+
+        try {
+            plan.setSubjects(rs.getString("subjects"));
+        } catch (SQLException e) {
+            plan.setSubjects(null);
+        }
+
+        plan.setDeadline(rs.getDate("end_date").toLocalDate());
+        plan.setDifficulty(rs.getString("experience_level"));
         plan.setDailyHours(rs.getInt("daily_hours"));
-        plan.setCompletionPercentage(rs.getInt("completion_percentage"));
+
+        try {
+            plan.setCompletionPercentage(rs.getInt("completion_percentage"));
+        } catch (SQLException e) {
+            plan.setCompletionPercentage(0);
+        }
+
+        try {
+            plan.setAiGenerated(rs.getBoolean("ai_generated"));
+        } catch (SQLException e) {
+            plan.setAiGenerated(false);
+        }
+
+        try {
+            plan.setRole(rs.getString("role"));
+        } catch (SQLException e) {
+            plan.setRole("NORMAL");
+        }
+
+        try {
+            plan.setLoginType(rs.getString("login_type"));
+        } catch (SQLException e) {
+            plan.setLoginType("GOOGLE");
+        }
+
         return plan;
     }
 }

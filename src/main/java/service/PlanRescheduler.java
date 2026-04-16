@@ -19,9 +19,6 @@ public class PlanRescheduler {
         this.studyPlanDAO = new StudyPlanDAO();
     }
 
-    /**
-     * Result object containing rescheduling results
-     */
     public static class RescheduleResult {
         public final boolean success;
         public final String message;
@@ -36,18 +33,11 @@ public class PlanRescheduler {
         }
     }
 
-    /**
-     * Main method to intelligently reschedule missed tasks
-     * @param planId The ID of the plan to reschedule
-     * @param missedTasks List of missed tasks to reschedule
-     * @return RescheduleResult with details of the operation
-     */
     public RescheduleResult rescheduleMissedTasks(int planId, List<StudyTask> missedTasks) {
         if (missedTasks == null || missedTasks.isEmpty()) {
             return new RescheduleResult(false, "No missed tasks to reschedule", 0, null);
         }
 
-        // Get the study plan (fresh from database)
         StudyPlan plan = studyPlanDAO.findById(planId);
         if (plan == null) {
             return new RescheduleResult(false, "Study plan not found", 0, null);
@@ -56,206 +46,154 @@ public class PlanRescheduler {
         LocalDate today = LocalDate.now();
         LocalDate deadline = plan.getDeadline();
 
-        // Calculate days remaining
-        long daysRemaining = ChronoUnit.DAYS.between(today, deadline);
+        long daysRemaining = ChronoUnit.DAYS.between(today, deadline) + 1;
         if (daysRemaining <= 0) {
             return new RescheduleResult(false, "Deadline has passed. Cannot reschedule tasks.", 0, null);
         }
 
-        // Get all existing tasks from today until deadline
-        List<StudyTask> allFutureTasks = new ArrayList<>();
+        System.out.println("\n=== SMART RESCHEDULING ===");
+        System.out.println("Plan ID: " + planId);
+        System.out.println("Missed tasks: " + missedTasks.size());
+        System.out.println("Days remaining: " + daysRemaining);
+        System.out.println("Max tasks/day: " + plan.getDailyHours());
+
+        // Get count of tasks per day for remaining days
+        Map<LocalDate, Integer> tasksPerDay = new HashMap<>();
+        List<StudyTask> allPendingTasks = new ArrayList<>();
+
         for (int i = 0; i < daysRemaining; i++) {
             LocalDate date = today.plusDays(i);
-            allFutureTasks.addAll(studyTaskDAO.findTasksByDate(planId, date));
+            List<StudyTask> dayTasks = studyTaskDAO.findTasksByDate(planId, date);
+
+            // Count only PENDING tasks
+            int pendingCount = 0;
+            for (StudyTask task : dayTasks) {
+                if (!"COMPLETED".equals(task.getStatus())) {
+                    pendingCount++;
+                    allPendingTasks.add(task);
+                }
+            }
+            tasksPerDay.put(date, pendingCount);
         }
 
-        // Calculate maximum capacity per day based on daily hours
-        int maxTasksPerDay = plan.getDailyHours();
+        // Find available slots
+        List<LocalDate> availableSlots = new ArrayList<>();
+        for (Map.Entry<LocalDate, Integer> entry : tasksPerDay.entrySet()) {
+            int currentTasks = entry.getValue();
+            int slotsAvailable = plan.getDailyHours() - currentTasks;
 
-        // Calculate if we can fit all missed tasks
-        int totalMissed = missedTasks.size();
-        long availableDays = daysRemaining;
-        long currentTotalTasks = allFutureTasks.size();
-        long newTotalTasks = currentTotalTasks + totalMissed;
+            for (int i = 0; i < slotsAvailable; i++) {
+                availableSlots.add(entry.getKey());
+            }
+        }
 
-        double averageTasksPerDay = (double) newTotalTasks / availableDays;
+        System.out.println("Available slots found: " + availableSlots.size());
 
-        // If workload is too high, return detailed message
-        if (averageTasksPerDay > maxTasksPerDay) {
+        // Check if we have enough slots
+        if (availableSlots.size() < missedTasks.size()) {
+            int shortage = missedTasks.size() - availableSlots.size();
             return new RescheduleResult(false,
-                    String.format("Cannot reschedule: Would require %.1f tasks/day, but max is %d.\n" +
-                                    "Current daily hours: %d\n" +
-                                    "Please increase daily hours in 'Update Plan' and try again.",
-                            averageTasksPerDay, maxTasksPerDay, plan.getDailyHours()),
-                    totalMissed, null);
+                    String.format("❌ Cannot reschedule all missed tasks!\n\n" +
+                                    "• Missed tasks: %d\n" +
+                                    "• Available slots: %d\n" +
+                                    "• Shortage: %d slots\n\n" +
+                                    "💡 Solutions:\n" +
+                                    "1. Increase daily hours to %d+\n" +
+                                    "2. Extend deadline by %d+ days\n" +
+                                    "3. Complete some pending tasks first",
+                            missedTasks.size(), availableSlots.size(), shortage,
+                            plan.getDailyHours() + (int)Math.ceil((double)shortage / daysRemaining),
+                            (int)Math.ceil((double)shortage / plan.getDailyHours())),
+                    missedTasks.size(), null);
         }
 
-        // Intelligent distribution algorithm
-        Map<LocalDate, List<StudyTask>> distribution = distributeTasksIntelligently(
-                planId, today, (int) daysRemaining, allFutureTasks, missedTasks, maxTasksPerDay);
+        // MARK ORIGINAL MISSED TASKS AS RESCHEDULED
+        for (StudyTask missedTask : missedTasks) {
+            studyTaskDAO.updateStatus(missedTask.getId(), "RESCHEDULED");
+            System.out.println("  Marked task " + missedTask.getId() + " as RESCHEDULED");
+        }
 
-        // Apply the distribution to database
-        int rescheduled = applyDistribution(planId, distribution);
+        // Reschedule missed tasks into available slots
+        int rescheduled = 0;
+        Map<LocalDate, Integer> newTasksAdded = new HashMap<>();
 
-        // Calculate new distribution summary
-        Map<LocalDate, Integer> summary = new TreeMap<>();
-        for (Map.Entry<LocalDate, List<StudyTask>> entry : distribution.entrySet()) {
-            summary.put(entry.getKey(), entry.getValue().size());
+        // Shuffle available slots to distribute evenly
+        Collections.shuffle(availableSlots);
+
+        for (StudyTask missedTask : missedTasks) {
+            if (availableSlots.isEmpty()) break;
+
+            LocalDate newDate = availableSlots.remove(0);
+
+            // Create new task with clean description (no status text)
+            String description = missedTask.getDescription();
+            // Remove any existing status text
+            description = description.replace(" [rescheduled]", "")
+                    .replace(" (Missed)", "")
+                    .replace(" (Rescheduled)", "");
+
+            StudyTask newTask = new StudyTask(
+                    missedTask.getGoalId(),
+                    newDate,
+                    description,
+                    missedTask.isRequiredCommit(),
+                    missedTask.getTopicId(),
+                    missedTask.getSessionType()
+            );
+            newTask.setStatus("PENDING");
+
+            // Save the new task
+            studyTaskDAO.save(newTask);
+            rescheduled++;
+
+            // Track additions
+            newTasksAdded.put(newDate, newTasksAdded.getOrDefault(newDate, 0) + 1);
+
+            System.out.println("  Created new task: " + description + " on " + newDate);
+        }
+
+        System.out.println("✅ Successfully rescheduled " + rescheduled + " tasks");
+        System.out.println("=== RESCHEDULING COMPLETE ===\n");
+
+        // Build success message
+        StringBuilder distribution = new StringBuilder();
+        for (Map.Entry<LocalDate, Integer> entry : newTasksAdded.entrySet()) {
+            distribution.append(String.format("  • %s: +%d task(s)\n",
+                    entry.getKey(), entry.getValue()));
         }
 
         return new RescheduleResult(true,
-                String.format("Successfully rescheduled %d missed tasks across %d days",
-                        rescheduled, summary.size()),
-                rescheduled, summary);
-    }
-    /**
-     * Calculate current task load per day
-     */
-    private Map<LocalDate, Integer> calculateDailyLoad(List<StudyTask> tasks) {
-        Map<LocalDate, Integer> load = new HashMap<>();
-        for (StudyTask task : tasks) {
-            LocalDate date = task.getTaskDate();
-            load.put(date, load.getOrDefault(date, 0) + 1);
-        }
-        return load;
+                String.format("✅ Successfully rescheduled %d missed task(s)!\n\n" +
+                                "📅 New tasks added to:\n%s\n" +
+                                "📌 Original missed tasks marked as 'Rescheduled'",
+                        rescheduled, distribution.toString()),
+                rescheduled, newTasksAdded);
     }
 
-    /**
-     * Intelligently distribute tasks across remaining days
-     * Updated to add [rescheduled] tag only to moved tasks
-     */
-    private Map<LocalDate, List<StudyTask>> distributeTasksIntelligently(
-            int planId, LocalDate startDate, int daysRemaining,
-            List<StudyTask> existingTasks, List<StudyTask> missedTasks, int maxTasksPerDay) {
-
-        Map<LocalDate, List<StudyTask>> distribution = new TreeMap<>();
-
-        // Initialize distribution with existing tasks
-        for (StudyTask task : existingTasks) {
-            LocalDate date = task.getTaskDate();
-            distribution.computeIfAbsent(date, k -> new ArrayList<>()).add(task);
-        }
-
-        // Sort missed tasks by date (oldest first)
-        missedTasks.sort(Comparator.comparing(StudyTask::getTaskDate));
-
-        // Calculate target tasks per day (aim for even distribution)
-        int totalTasks = existingTasks.size() + missedTasks.size();
-        int baseTasksPerDay = totalTasks / daysRemaining;
-        int remainderTasks = totalTasks % daysRemaining;
-
-        // Distribute missed tasks
-        int missedIndex = 0;
-        for (int dayOffset = 0; dayOffset < daysRemaining && missedIndex < missedTasks.size(); dayOffset++) {
-            LocalDate currentDate = startDate.plusDays(dayOffset);
-
-            // Get current tasks for this day
-            List<StudyTask> dayTasks = distribution.getOrDefault(currentDate, new ArrayList<>());
-            int currentCount = dayTasks.size();
-
-            // Calculate target for this day
-            int targetForDay = baseTasksPerDay + (dayOffset < remainderTasks ? 1 : 0);
-            int canAdd = Math.max(0, targetForDay - currentCount);
-
-            // Add missed tasks up to capacity
-            for (int i = 0; i < canAdd && missedIndex < missedTasks.size(); i++) {
-                StudyTask missedTask = missedTasks.get(missedIndex);
-
-                // 🔥 UPDATED: Add [rescheduled] tag only to tasks being moved
-                String newDescription;
-                if (missedTask.getTaskDate().isBefore(LocalDate.now())) {
-                    newDescription = missedTask.getDescription() + " [rescheduled]";
-                } else {
-                    newDescription = missedTask.getDescription();
-                }
-
-                // Create a new task for this date
-                StudyTask newTask = new StudyTask(
-                        missedTask.getGoalId(),
-                        currentDate,
-                        newDescription,
-                        missedTask.isRequiredCommit(),
-                        missedTask.getTopicId(),
-                        missedTask.getSessionType()
-                );
-
-                dayTasks.add(newTask);
-                missedIndex++;
-            }
-
-            distribution.put(currentDate, dayTasks);
-        }
-
-        // If any missed tasks remain, add them to the last day
-        if (missedIndex < missedTasks.size()) {
-            LocalDate lastDate = startDate.plusDays(daysRemaining - 1);
-            List<StudyTask> lastDayTasks = distribution.getOrDefault(lastDate, new ArrayList<>());
-
-            while (missedIndex < missedTasks.size()) {
-                StudyTask missedTask = missedTasks.get(missedIndex);
-
-                // 🔥 UPDATED: Add [rescheduled] tag only to tasks being moved
-                String newDescription;
-                if (missedTask.getTaskDate().isBefore(LocalDate.now())) {
-                    newDescription = missedTask.getDescription() + " [rescheduled]";
-                } else {
-                    newDescription = missedTask.getDescription();
-                }
-
-                StudyTask newTask = new StudyTask(
-                        missedTask.getGoalId(),
-                        lastDate,
-                        newDescription,
-                        missedTask.isRequiredCommit(),
-                        missedTask.getTopicId(),
-                        missedTask.getSessionType()
-                );
-                lastDayTasks.add(newTask);
-                missedIndex++;
-            }
-            distribution.put(lastDate, lastDayTasks);
-        }
-
-        return distribution;
-    }
-
-    /**
-     * Apply the new distribution to the database
-     */
-    /**
-     * Apply the new distribution to the database
-     */
-    private int applyDistribution(int planId, Map<LocalDate, List<StudyTask>> distribution) {
-        // Delete all existing tasks for this plan
-        studyTaskDAO.deleteByGoalId(planId);
-
-        int taskCount = 0;
-
-        // Save all tasks from the new distribution
-        for (Map.Entry<LocalDate, List<StudyTask>> entry : distribution.entrySet()) {
-            for (StudyTask task : entry.getValue()) {
-                studyTaskDAO.save(task);
-                taskCount++;
-            }
-        }
-
-        return taskCount;
-    }
-    /**
-     * Helper method to check if rescheduling is possible without changes
-     */
     public boolean canReschedule(int planId, List<StudyTask> missedTasks) {
         StudyPlan plan = studyPlanDAO.findById(planId);
         if (plan == null) return false;
 
         LocalDate today = LocalDate.now();
-        long daysRemaining = ChronoUnit.DAYS.between(today, plan.getDeadline());
+        long daysRemaining = ChronoUnit.DAYS.between(today, plan.getDeadline()) + 1;
         if (daysRemaining <= 0) return false;
 
-        int totalMissed = missedTasks.size();
-        int maxTasksPerDay = plan.getDailyHours();
+        // Count available slots
+        int availableSlots = 0;
+        for (int i = 0; i < daysRemaining; i++) {
+            LocalDate date = today.plusDays(i);
+            List<StudyTask> dayTasks = studyTaskDAO.findTasksByDate(planId, date);
 
-        // Rough estimate: can we fit them?
-        return (double) totalMissed / daysRemaining <= maxTasksPerDay * 1.5; // Allow 50% buffer
+            int pendingCount = 0;
+            for (StudyTask task : dayTasks) {
+                if (!"COMPLETED".equals(task.getStatus())) {
+                    pendingCount++;
+                }
+            }
+
+            availableSlots += Math.max(0, plan.getDailyHours() - pendingCount);
+        }
+
+        return availableSlots >= missedTasks.size();
     }
 }

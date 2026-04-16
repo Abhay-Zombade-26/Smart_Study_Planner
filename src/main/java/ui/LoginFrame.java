@@ -1,4 +1,3 @@
-
 package ui;
 
 import config.AppConfig;
@@ -8,9 +7,11 @@ import service.GitHubAuthService;
 import service.GoogleAuthService;
 
 import javax.swing.*;
-        import javax.swing.border.EmptyBorder;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-        import java.io.IOException;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.BindException;
 import java.net.InetSocketAddress;
@@ -27,18 +28,29 @@ public class LoginFrame extends JFrame {
     private HttpServer server;
     private boolean serverStarted = false;
     private JLabel statusLabel;
+    private JLabel githubNoteLabel;
+
+    // Colors
+    private final Color PRIMARY_COLOR = new Color(79, 70, 229);
+    private final Color SECONDARY_COLOR = new Color(16, 185, 129);
+    private final Color GOOGLE_COLOR = new Color(66, 133, 244);
+    private final Color GITHUB_COLOR = new Color(36, 41, 47);
+    private final Color BG_GRADIENT_START = new Color(245, 247, 250);
+    private final Color BG_GRADIENT_END = new Color(255, 255, 255);
+    private final Color CARD_BG = Color.WHITE;
+    private final Color TEXT_PRIMARY = new Color(17, 24, 39);
+    private final Color TEXT_SECONDARY = new Color(107, 114, 128);
 
     public LoginFrame() {
         initUI();
         setupEventListeners();
-        // Start server in background thread
         new Thread(this::startOAuthServer).start();
     }
 
     private void initUI() {
         setTitle("Smart Study Planner - Login");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(1000, 700);
         setLocationRelativeTo(null);
         setResizable(false);
 
@@ -49,8 +61,19 @@ public class LoginFrame extends JFrame {
             e.printStackTrace();
         }
 
-        mainPanel = new JPanel(new GridBagLayout());
-        mainPanel.setBackground(new Color(245, 247, 250));
+        // Main panel with gradient background
+        mainPanel = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                GradientPaint gp = new GradientPaint(0, 0, BG_GRADIENT_START, getWidth(), getHeight(), BG_GRADIENT_END);
+                g2d.setPaint(gp);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
+        mainPanel.setLayout(new GridBagLayout());
         mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         JPanel centerPanel = createCenterPanel();
@@ -69,78 +92,116 @@ public class LoginFrame extends JFrame {
     private JPanel createCenterPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(Color.WHITE);
+        panel.setBackground(CARD_BG);
         panel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(230, 236, 240), 1, true),
-                new EmptyBorder(40, 60, 40, 60)
+                new EmptyBorder(50, 80, 50, 80)
         ));
-        panel.setPreferredSize(new Dimension(400, 500));
-        panel.setMaximumSize(new Dimension(400, 500));
+        panel.setPreferredSize(new Dimension(500, 650));
+        panel.setMaximumSize(new Dimension(500, 650));
 
-        // App Logo/Title
-        JLabel titleLabel = new JLabel("📚 Smart Study Planner");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        titleLabel.setForeground(new Color(33, 33, 33));
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel subtitleLabel = new JLabel("Goal-Based GitHub Integrated Planner");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        subtitleLabel.setForeground(new Color(100, 116, 139));
-        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        panel.add(Box.createVerticalStrut(20));
-        panel.add(titleLabel);
+        // App Logo/Icon
+        JLabel iconLabel = new JLabel("📚");
+        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 64));
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(iconLabel);
         panel.add(Box.createVerticalStrut(10));
-        panel.add(subtitleLabel);
-        panel.add(Box.createVerticalStrut(40));
 
-        // Status indicator
-        statusLabel = new JLabel("⚡ Initializing...");
+        // App Title
+        JLabel titleLabel = new JLabel("Smart Study Planner");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        titleLabel.setForeground(TEXT_PRIMARY);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(5));
+
+        // Subtitle
+        JLabel subtitleLabel = new JLabel("Goal-Based Learning with GitHub Integration");
+        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitleLabel.setForeground(TEXT_SECONDARY);
+        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(subtitleLabel);
+        panel.add(Box.createVerticalStrut(30));
+
+        // Status indicator with animation
+        statusLabel = new JLabel("⚡ Initializing server...");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         statusLabel.setForeground(new Color(100, 116, 139));
         statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(statusLabel);
         panel.add(Box.createVerticalStrut(20));
 
-        // Role selection
-        JLabel roleLabel = new JLabel("Select your login method");
-        roleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        roleLabel.setForeground(new Color(33, 33, 33));
+        // Separator
+        JSeparator separator = new JSeparator();
+        separator.setMaximumSize(new Dimension(300, 1));
+        separator.setForeground(new Color(229, 231, 235));
+        separator.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(separator);
+        panel.add(Box.createVerticalStrut(30));
+
+        // Role selection title
+        JLabel roleLabel = new JLabel("Choose Your Login Method");
+        roleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        roleLabel.setForeground(TEXT_PRIMARY);
         roleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(roleLabel);
-        panel.add(Box.createVerticalStrut(20));
+        panel.add(Box.createVerticalStrut(25));
 
-        // Google Login Button - Shows account chooser with ALL accounts!
-        googleLoginBtn = createOAuthButton(
+        // Google Login Button
+        googleLoginBtn = createModernButton(
                 "Continue with Google",
-                new Color(66, 133, 244),
-                "G"
+                GOOGLE_COLOR
         );
-        googleLoginBtn.setToolTipText("Login with Google - Shows all your accounts");
+        googleLoginBtn.setToolTipText("Login with Google for Normal Student features");
         panel.add(googleLoginBtn);
         panel.add(Box.createVerticalStrut(15));
 
+        // OR Divider
+        JPanel orPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        orPanel.setBackground(CARD_BG);
+        JSeparator leftSep = new JSeparator();
+        leftSep.setPreferredSize(new Dimension(80, 1));
         JLabel orLabel = new JLabel("or");
         orLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        orLabel.setForeground(new Color(148, 163, 184));
-        orLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(orLabel);
+        orLabel.setForeground(TEXT_SECONDARY);
+        JSeparator rightSep = new JSeparator();
+        rightSep.setPreferredSize(new Dimension(80, 1));
+        orPanel.add(leftSep);
+        orPanel.add(orLabel);
+        orPanel.add(rightSep);
+        orPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(orPanel);
         panel.add(Box.createVerticalStrut(15));
 
         // GitHub Login Button
-        githubLoginBtn = createOAuthButton(
+        githubLoginBtn = createModernButton(
                 "Continue with GitHub",
-                new Color(36, 41, 47),
-                "GH"
+                GITHUB_COLOR
         );
         githubLoginBtn.setToolTipText("Login with GitHub for IT Student features");
         panel.add(githubLoginBtn);
+        panel.add(Box.createVerticalStrut(10));
 
+        // GitHub note
+        githubNoteLabel = new JLabel("💡 Use GitHub login for better experience as an IT Student");
+        githubNoteLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        githubNoteLabel.setForeground(new Color(245, 158, 11));
+        githubNoteLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(githubNoteLabel);
         panel.add(Box.createVerticalStrut(30));
 
+        // Features section
+        JPanel featuresPanel = new JPanel();
+        featuresPanel.setLayout(new BoxLayout(featuresPanel, BoxLayout.Y_AXIS));
+        featuresPanel.setBackground(CARD_BG);
+        featuresPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+
+        panel.add(Box.createVerticalStrut(20));
+
         // Footer
-        JLabel footerLabel = new JLabel("© 2024 Smart Study Planner");
-        footerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        JLabel footerLabel = new JLabel("© 2026 Smart Study Planner. All rights reserved.");
+        footerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         footerLabel.setForeground(new Color(148, 163, 184));
         footerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(footerLabel);
@@ -148,58 +209,73 @@ public class LoginFrame extends JFrame {
         return panel;
     }
 
-    private JButton createOAuthButton(String text, Color bgColor, String icon) {
+    private JButton createModernButton(String text, Color bgColor) {
         JButton button = new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
         button.setForeground(Color.WHITE);
         button.setBackground(bgColor);
         button.setBorderPainted(false);
         button.setFocusPainted(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setAlignmentX(Component.CENTER_ALIGNMENT);
-        button.setPreferredSize(new Dimension(280, 45));
-        button.setMaximumSize(new Dimension(280, 45));
+        button.setPreferredSize(new Dimension(320, 50));
+        button.setMaximumSize(new Dimension(320, 50));
 
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(bgColor.darker(), 1, true),
-                new EmptyBorder(10, 20, 10, 20)
-        ));
+        // Hover effect
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(bgColor.darker());
+                button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(bgColor);
+            }
+        });
 
         return button;
     }
 
     private void setupEventListeners() {
-        googleLoginBtn.addActionListener(e -> handleGoogleLogin());
-        githubLoginBtn.addActionListener(e -> handleGitHubLogin());
-    }
+        googleLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                statusLabel.setText("🔑 Opening Google login...");
+                try {
+                    GoogleAuthService googleService = new GoogleAuthService();
+                    String url = googleService.getAuthorizationUrl();
+                    Desktop.getDesktop().browse(new URI(url));
+                    statusLabel.setText("✅ Check your browser to continue login");
+                } catch (Exception ex) {
+                    statusLabel.setText("❌ Error: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(this,
+                            "Failed to initialize Google login: " + ex.getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                statusLabel.setText("⏳ Server starting... please wait");
+            }
+        });
 
-    private void handleGoogleLogin() {
-        if (serverStarted) {
-            GoogleAuthService googleAuth = new GoogleAuthService();
-            String url = googleAuth.getAuthorizationUrl();
-            System.out.println("\n🚀 Opening Google Login with Account Chooser...");
-            System.out.println("📌 You will see ALL your Google accounts to choose from!");
-            openBrowser(url);
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "Authentication server is starting... Please try again in 2 seconds.",
-                    "Server Starting",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-
-    private void handleGitHubLogin() {
-        if (serverStarted) {
-            GitHubAuthService githubAuth = new GitHubAuthService();
-            String url = githubAuth.getAuthorizationUrl();
-            System.out.println("\n🚀 Opening GitHub Login...");
-            openBrowser(url);
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "Authentication server is starting... Please try again in 2 seconds.",
-                    "Server Starting",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
+        githubLoginBtn.addActionListener(e -> {
+            if (serverStarted) {
+                statusLabel.setText("🔑 Opening GitHub login...");
+                try {
+                    GitHubAuthService gitHubService = new GitHubAuthService();
+                    String url = gitHubService.getAuthorizationUrl();
+                    Desktop.getDesktop().browse(new URI(url));
+                    statusLabel.setText("✅ Check your browser to continue login");
+                } catch (Exception ex) {
+                    statusLabel.setText("❌ Error: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(this,
+                            "Failed to initialize GitHub login: " + ex.getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                statusLabel.setText("⏳ Server starting... please wait");
+            }
+        });
     }
 
     private void startOAuthServer() {
@@ -211,11 +287,10 @@ public class LoginFrame extends JFrame {
                 attempt++;
                 System.out.println("Attempt " + attempt + " to start server on port 8888...");
 
-                // Always use port 8888
                 server = HttpServer.create(new InetSocketAddress("localhost", 8888), 0);
 
                 // Google callback
-                server.createContext("/callback", new HttpHandler() {
+                server.createContext("/google-callback", new HttpHandler() {
                     @Override
                     public void handle(HttpExchange exchange) throws IOException {
                         handleOAuthCallback(exchange, "GOOGLE");
@@ -223,7 +298,7 @@ public class LoginFrame extends JFrame {
                 });
 
                 // GitHub callback
-                server.createContext("/github-callback", new HttpHandler() {
+                server.createContext("/callback", new HttpHandler() {
                     @Override
                     public void handle(HttpExchange exchange) throws IOException {
                         handleOAuthCallback(exchange, "GITHUB");
@@ -237,12 +312,10 @@ public class LoginFrame extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     statusLabel.setText("✅ Server ready - Click to login");
                     statusLabel.setForeground(new Color(46, 204, 113));
+                    System.out.println("✅ OAuth server started on http://localhost:8888");
+                    System.out.println("   GitHub callback: http://localhost:8888/callback");
+                    System.out.println("   Google callback: http://localhost:8888/google-callback");
                 });
-
-                System.out.println("✅ OAuth server started successfully on port 8888");
-                System.out.println("📎 Google callback: http://localhost:8888/callback");
-                System.out.println("📎 GitHub callback: http://localhost:8888/github-callback");
-                System.out.println("✅ You can now click login buttons!\n");
 
             } catch (BindException e) {
                 System.err.println("❌ Port 8888 is already in use (attempt " + attempt + ")");
@@ -260,7 +333,7 @@ public class LoginFrame extends JFrame {
                             String pid = parts[parts.length - 1];
                             Runtime.getRuntime().exec("taskkill /F /PID " + pid);
                             System.out.println("✅ Killed process with PID: " + pid);
-                            Thread.sleep(1000); // Wait for process to die
+                            Thread.sleep(1000);
                         }
                     }
                 } catch (Exception ex) {
@@ -294,21 +367,28 @@ public class LoginFrame extends JFrame {
             code = query.split("code=")[1].split("&")[0];
         }
 
-        String response =
+        String response = "<!DOCTYPE html>" +
                 "<html>" +
-                        "<head>" +
-                        "<style>" +
-                        "body { font-family: 'Segoe UI', sans-serif; text-align: center; padding-top: 50px; }" +
-                        "h2 { color: #2ecc71; }" +
-                        ".success { color: #27ae60; }" +
-                        "</style>" +
-                        "</head>" +
-                        "<body>" +
-                        "    <h2>✅ Authentication Successful!</h2>" +
-                        "    <p class='success'>You can close this window and return to the application.</p>" +
-                        "    <p>The application will automatically continue...</p>" +
-                        "</body>" +
-                        "</html>";
+                "<head>" +
+                "<style>" +
+                "body { font-family: 'Segoe UI', sans-serif; text-align: center; padding-top: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; }" +
+                ".container { background: white; max-width: 500px; margin: 0 auto; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }" +
+                "h2 { color: #2ecc71; margin-bottom: 20px; }" +
+                ".success { color: #27ae60; font-size: 48px; margin-bottom: 20px; }" +
+                "p { color: #666; line-height: 1.6; }" +
+                ".button { display: inline-block; margin-top: 20px; padding: 10px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; }" +
+                "</style>" +
+                "</head>" +
+                "<body>" +
+                "<div class='container'>" +
+                "<div class='success'>✅</div>" +
+                "<h2>Authentication Successful!</h2>" +
+                "<p>You have successfully logged in to Smart Study Planner.</p>" +
+                "<p>You can close this window and return to the application.</p>" +
+                "<p style='font-size: 12px; color: #999;'>The application will automatically continue...</p>" +
+                "</div>" +
+                "</body>" +
+                "</html>";
 
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
         exchange.sendResponseHeaders(200, response.getBytes("UTF-8").length);
@@ -329,35 +409,6 @@ public class LoginFrame extends JFrame {
         }
 
         exchange.close();
-    }
-
-    private void openBrowser(String url) {
-        try {
-            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(new URI(url));
-                System.out.println("✅ Browser opened successfully");
-            } else {
-                // Fallback for systems without Desktop support
-                String os = System.getProperty("os.name").toLowerCase();
-                Runtime rt = Runtime.getRuntime();
-                if (os.contains("win")) {
-                    rt.exec("rundll32 url.dll,FileProtocolHandler " + url);
-                } else if (os.contains("mac")) {
-                    rt.exec("open " + url);
-                } else if (os.contains("nix") || os.contains("nux")) {
-                    rt.exec("xdg-open " + url);
-                }
-                System.out.println("✅ Browser opened using fallback method");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "<html>Failed to open browser automatically.<br>" +
-                            "Please copy and paste this URL into your browser:<br><br>" +
-                            "<b>" + url + "</b></html>",
-                    "Open URL Manually",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
     }
 
     private void authenticateUser(String provider, String code) {

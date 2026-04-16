@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 public class NormalPlanGenerator implements PlanStrategyService {
 
@@ -33,6 +34,8 @@ public class NormalPlanGenerator implements PlanStrategyService {
 
         try {
             StudyPlan plan = new StudyPlan(user.getId(), subjects, deadline, difficulty, dailyHours);
+            plan.setRole("NORMAL");
+            plan.setLoginType("GOOGLE");
             plan = studyPlanDAO.save(plan);
             System.out.println("Plan saved to DB with ID: " + (plan != null ? plan.getId() : "null"));
 
@@ -50,84 +53,113 @@ public class NormalPlanGenerator implements PlanStrategyService {
         }
     }
 
-    /**
-     * Generates study tasks based on the topics associated with the plan.
-     * Called from PlanManagementFrame after topics are added.
-     */
     public List<StudyTask> generateTasksFromTopics(StudyPlan plan) {
         List<StudyTask> tasks = new ArrayList<>();
 
-        // Retrieve topics for this plan
         List<Topic> topics = topicDAO.findByPlanId(plan.getId());
         if (topics.isEmpty()) {
-            System.out.println("No topics found for plan " + plan.getId() + ". Cannot generate tasks.");
+            System.out.println("No topics found for plan " + plan.getId());
             return tasks;
         }
 
-        // Calculate weights for each topic
+        System.out.println("Found " + topics.size() + " topics for plan " + plan.getId());
+
         weightCalculator.calculateWeights(topics);
 
-        // Calculate total available study hours until deadline
         LocalDate today = LocalDate.now();
-        long daysRemaining = ChronoUnit.DAYS.between(today, plan.getDeadline());
+        // Include the deadline day itself
+        long daysRemainingLong = ChronoUnit.DAYS.between(today, plan.getDeadline()) + 1;
+        int daysRemaining = (int) daysRemainingLong; // Convert to int safely
+
+        System.out.println("Today: " + today);
+        System.out.println("Deadline: " + plan.getDeadline());
+        System.out.println("Days remaining (including deadline): " + daysRemaining);
+
         if (daysRemaining <= 0) {
-            System.out.println("Deadline is in the past or today!");
+            System.out.println("Deadline passed or is today!");
             return tasks;
         }
-        int totalHours = (int) (daysRemaining * plan.getDailyHours());
 
-        // Distribute hours proportionally to topic weights
+        int totalHours = (int) (daysRemaining * plan.getDailyHours());
+        System.out.println("Total hours: " + totalHours);
+
         Map<Integer, Double> hoursPerTopic = weightCalculator.distributeHours(topics, totalHours);
 
         // For each topic, generate tasks spread across the available days
         for (Topic topic : topics) {
             double topicHours = hoursPerTopic.get(topic.getId());
-            // Convert hours to number of study sessions (assuming each session is 1 hour)
             int sessionCount = (int) Math.ceil(topicHours);
-            // Distribute sessions evenly across the days remaining
-            long interval = daysRemaining / sessionCount;
-            if (interval < 1) interval = 1;
+            if (sessionCount <= 0) sessionCount = 1;
 
-            // Simple session type distribution: 30% Learn, 40% Practice, 30% Review
+            System.out.println("Topic: " + topic.getName() + " - Hours: " + topicHours + " - Sessions: " + sessionCount);
+
+            // Calculate session types distribution
             int learnCount = (int) Math.ceil(sessionCount * 0.3);
             int practiceCount = (int) Math.ceil(sessionCount * 0.4);
             int reviewCount = sessionCount - learnCount - practiceCount;
 
-            int sessionIndex = 0;
-            for (int dayOffset = 0; dayOffset < daysRemaining && sessionIndex < sessionCount; dayOffset += interval) {
-                if (dayOffset >= daysRemaining) break;
-                LocalDate taskDate = today.plusDays(dayOffset);
+            // Create a list of all available dates
+            List<LocalDate> availableDates = new ArrayList<>();
+            for (int i = 0; i < daysRemaining; i++) {
+                availableDates.add(today.plusDays(i));
+            }
+
+            // Distribute sessions evenly across available dates
+            // This ensures tasks are spread across the entire period, not bunched up
+            for (int i = 0; i < sessionCount; i++) {
+                // Calculate which date index this session should go to
+                int dateIndex = (int) ((long) i * daysRemaining / sessionCount);
+                if (dateIndex >= daysRemaining) dateIndex = daysRemaining - 1;
+
+                LocalDate taskDate = availableDates.get(dateIndex);
+
+                // Determine session type
                 String sessionType;
-                if (sessionIndex < learnCount) {
+                if (i < learnCount) {
                     sessionType = "LEARN";
-                } else if (sessionIndex < learnCount + practiceCount) {
+                } else if (i < learnCount + practiceCount) {
                     sessionType = "PRACTICE";
                 } else {
                     sessionType = "REVIEW";
                 }
 
                 String description = String.format("%s: %s", topic.getName(), sessionType.toLowerCase());
+
                 StudyTask task = new StudyTask(
                         plan.getId(),
                         taskDate,
                         description,
-                        false,           // requiredCommit false for normal mode
+                        false,
                         topic.getId(),
                         sessionType
                 );
                 tasks.add(task);
-                sessionIndex++;
             }
         }
 
         System.out.println("Generated " + tasks.size() + " tasks from topics.");
+
+        // Print distribution by date for verification
+        Map<LocalDate, Integer> dateDistribution = new HashMap<>();
+        for (StudyTask task : tasks) {
+            dateDistribution.put(task.getTaskDate(), dateDistribution.getOrDefault(task.getTaskDate(), 0) + 1);
+        }
+        System.out.println("Task distribution by date:");
+        for (Map.Entry<LocalDate, Integer> entry : dateDistribution.entrySet()) {
+            System.out.println("  " + entry.getKey() + ": " + entry.getValue() + " tasks");
+        }
+
+        // Save all tasks to database
+        if (!tasks.isEmpty()) {
+            studyTaskDAO.saveAll(tasks);
+            System.out.println("✅ Saved " + tasks.size() + " tasks to database");
+        }
+
         return tasks;
     }
 
-    // Legacy method – not used in new workflow, kept for compatibility
     @Override
     public List<StudyTask> generateTasks(StudyPlan plan) {
-        // This is the old simple rotation method; we return empty list as we use generateTasksFromTopics now.
         return new ArrayList<>();
     }
 

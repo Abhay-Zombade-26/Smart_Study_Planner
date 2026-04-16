@@ -11,7 +11,7 @@ public class User {
     private String githubUsername;
     private String accessToken;
     private String avatarUrl;
-    private Integer activePlanId;          // ID of the currently active study plan
+    private Integer activePlanId; // For Google flow
 
     public User() {}
 
@@ -59,7 +59,6 @@ public class User {
                 ", email='" + email + '\'' +
                 ", role=" + role +
                 ", githubUsername='" + githubUsername + '\'' +
-                ", activePlanId=" + activePlanId +
                 '}';
     }
 }

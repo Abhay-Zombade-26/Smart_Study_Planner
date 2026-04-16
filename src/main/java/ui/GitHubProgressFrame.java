@@ -1,261 +1,839 @@
 package ui;
 
-import dao.GitHubActivityDAO;
-import model.GitHubActivity;
 import model.User;
+import model.StudyPlan;
+import model.StudyTask;
+import dao.StudyPlanDAO;
+import dao.StudyTaskDAO;
+import service.GitHubCommitChecker;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
+import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.File;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.TreeMap;
+
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.PiePlot;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.renderer.category.BarRenderer;
+import org.jfree.chart.renderer.category.LineAndShapeRenderer;
+import org.jfree.data.category.CategoryDataset;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.general.DefaultPieDataset;
 
 public class GitHubProgressFrame extends JPanel {
 
     private User user;
-    private GitHubActivityDAO gitHubActivityDAO;
-    private JTable progressTable;
-    private DefaultTableModel tableModel;
+    private StudyPlanDAO planDAO;
+    private StudyTaskDAO taskDAO;
+    private GitHubCommitChecker commitChecker;
+
+    // UI Components
+    private JLabel planNameLabel;
+    private JProgressBar overallProgressBar;
+    private JLabel progressPercentageLabel;
+    private JLabel completedTasksLabel;
+    private JLabel pendingTasksLabel;
+    private JLabel missedTasksLabel;
+    private JLabel totalTasksLabel;
+    private JLabel streakLabel;
+    private JLabel lastCommitLabel;
+    private JPanel mainContentPanel;
+    private JPanel chartsPanel;
+
+    // Color scheme
+    private final Color PRIMARY_COLOR = new Color(79, 70, 229);
+    private final Color SUCCESS_COLOR = new Color(34, 197, 94);
+    private final Color DANGER_COLOR = new Color(239, 68, 68);
+    private final Color WARNING_COLOR = new Color(245, 158, 11);
+    private final Color BG_LIGHT = new Color(249, 250, 251);
+    private final Color BORDER_COLOR = new Color(229, 231, 235);
+    private final Color CARD_BG = Color.WHITE;
+    private final Color TEXT_PRIMARY = new Color(17, 24, 39);
+    private final Color TEXT_SECONDARY = new Color(107, 114, 128);
 
     public GitHubProgressFrame(User user) {
         this.user = user;
-        this.gitHubActivityDAO = new GitHubActivityDAO();
+        this.planDAO = new StudyPlanDAO();
+        this.taskDAO = new StudyTaskDAO();
+        this.commitChecker = new GitHubCommitChecker();
+
+        setLayout(new BorderLayout());
+        setBackground(BG_LIGHT);
+        setBorder(new EmptyBorder(20, 20, 20, 20));
 
         initUI();
         loadProgressData();
+
+        // Auto-refresh every 30 seconds
+        new Timer(30000, e -> loadProgressData()).start();
     }
 
     private void initUI() {
-        setLayout(new BorderLayout());
-        setBackground(Color.WHITE);
-        setBorder(new EmptyBorder(20, 20, 20, 20));
+        mainContentPanel = new JPanel();
+        mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
+        mainContentPanel.setBackground(BG_LIGHT);
 
         // Header
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
+        JPanel headerPanel = createHeaderPanel();
+        mainContentPanel.add(headerPanel);
+        mainContentPanel.add(Box.createVerticalStrut(20));
 
-        JLabel titleLabel = new JLabel("📈 GitHub Progress Tracker");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        titleLabel.setForeground(new Color(33, 33, 33));
+        // Stats Dashboard
+        JPanel statsDashboard = createStatsDashboard();
+        mainContentPanel.add(statsDashboard);
+        mainContentPanel.add(Box.createVerticalStrut(20));
 
-        JLabel subtitleLabel = new JLabel("Track your commit activity and repository progress");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        subtitleLabel.setForeground(new Color(100, 116, 139));
+        // Charts Section
+        chartsPanel = createChartsSection();
+        mainContentPanel.add(chartsPanel);
 
-        headerPanel.add(titleLabel, BorderLayout.NORTH);
-        headerPanel.add(subtitleLabel, BorderLayout.SOUTH);
-
-        add(headerPanel, BorderLayout.NORTH);
-
-        // Table
-        createProgressTable();
-        JScrollPane scrollPane = new JScrollPane(progressTable);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240), 1));
-        scrollPane.getViewport().setBackground(Color.WHITE);
-
+        JScrollPane scrollPane = new JScrollPane(mainContentPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         add(scrollPane, BorderLayout.CENTER);
     }
 
-    private void createProgressTable() {
-        String[] columns = {"Repository", "Progress", "Last Commit", "Status"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+    private JPanel createHeaderPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(CARD_BG);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(20, 25, 20, 25)
+        ));
+
+        JPanel leftPanel = new JPanel(new GridLayout(2, 1));
+        leftPanel.setBackground(CARD_BG);
+
+        JLabel titleLabel = new JLabel("📊 GitHub Progress Tracker");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titleLabel.setForeground(TEXT_PRIMARY);
+
+        JLabel subtitleLabel = new JLabel("Track your study plan progress and commit activity in real-time");
+        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitleLabel.setForeground(TEXT_SECONDARY);
+
+        leftPanel.add(titleLabel);
+        leftPanel.add(subtitleLabel);
+
+        JButton refreshBtn = new JButton("🔄 Refresh Progress");
+        refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        refreshBtn.setBackground(PRIMARY_COLOR);
+        refreshBtn.setForeground(Color.WHITE);
+        refreshBtn.setBorderPainted(false);
+        refreshBtn.setFocusPainted(false);
+        refreshBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        refreshBtn.setPreferredSize(new Dimension(160, 40));
+        refreshBtn.addActionListener(e -> {
+            refreshBtn.setText("⏳ Refreshing...");
+            refreshBtn.setEnabled(false);
+
+            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                @Override
+                protected Void doInBackground() {
+                    commitChecker.checkAndUpdateAllTasks(user);
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    loadProgressData();
+                    refreshBtn.setText("🔄 Refresh Progress");
+                    refreshBtn.setEnabled(true);
+                }
+            };
+            worker.execute();
+        });
+
+        refreshBtn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent evt) {
+                refreshBtn.setBackground(PRIMARY_COLOR.darker());
             }
-        };
-
-        progressTable = new JTable(tableModel);
-        progressTable.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        progressTable.setRowHeight(50);
-        progressTable.setShowGrid(true);
-        progressTable.setGridColor(new Color(226, 232, 240));
-        progressTable.setSelectionBackground(new Color(239, 246, 255));
-        progressTable.setRowSelectionAllowed(false);
-
-        // Table header styling
-        JTableHeader header = progressTable.getTableHeader();
-        header.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        header.setBackground(new Color(248, 250, 252));
-        header.setForeground(new Color(33, 33, 33));
-        header.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
-
-        // Custom cell renderers
-        progressTable.getColumnModel().getColumn(0).setCellRenderer(new RepositoryCellRenderer());
-        progressTable.getColumnModel().getColumn(1).setCellRenderer(new ProgressCellRenderer());
-        progressTable.getColumnModel().getColumn(2).setCellRenderer(new DateCellRenderer());
-        progressTable.getColumnModel().getColumn(3).setCellRenderer(new StatusCellRenderer());
-
-        // Column widths
-        progressTable.getColumnModel().getColumn(0).setPreferredWidth(250);
-        progressTable.getColumnModel().getColumn(1).setPreferredWidth(150);
-        progressTable.getColumnModel().getColumn(2).setPreferredWidth(150);
-        progressTable.getColumnModel().getColumn(3).setPreferredWidth(100);
-    }
-
-    private void loadProgressData() {
-        tableModel.setRowCount(0);
-
-        List<GitHubActivity> activities = gitHubActivityDAO.findByUserId(user.getId());
-
-        if (activities.isEmpty()) {
-            // Add sample data for demonstration
-            addSampleData();
-        } else {
-            for (GitHubActivity activity : activities) {
-                int progress = calculateProgress(activity);
-                String lastCommit = activity.getLastCommitDate() != null ?
-                        activity.getLastCommitDate().toString() : "Never";
-                String status = activity.getStatus();
-
-                tableModel.addRow(new Object[]{
-                        activity.getRepoName(),
-                        progress,
-                        lastCommit,
-                        status
-                });
+            public void mouseExited(MouseEvent evt) {
+                refreshBtn.setBackground(PRIMARY_COLOR);
             }
-        }
+        });
+
+        panel.add(leftPanel, BorderLayout.WEST);
+        panel.add(refreshBtn, BorderLayout.EAST);
+
+        return panel;
     }
 
-    private void addSampleData() {
-        tableModel.addRow(new Object[]{"user/project-alpha", 75, "2024-01-15", "Green"});
-        tableModel.addRow(new Object[]{"user/project-beta", 45, "2024-01-14", "Yellow"});
-        tableModel.addRow(new Object[]{"user/project-gamma", 20, "2024-01-10", "Red"});
-        tableModel.addRow(new Object[]{"user/project-delta", 90, "2024-01-15", "Green"});
+    private JPanel createStatsDashboard() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(BG_LIGHT);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        JPanel planCard = createPlanCard();
+        panel.add(planCard, gbc);
+
+        gbc.gridy = 1;
+        JPanel progressCard = createProgressCard();
+        panel.add(progressCard, gbc);
+
+        gbc.gridy = 2;
+        gbc.gridwidth = 1;
+
+        gbc.gridx = 0;
+        JPanel completedCard = createStatCard("✅ Completed Tasks", "0", SUCCESS_COLOR);
+        completedTasksLabel = (JLabel) ((JPanel) completedCard.getComponent(1)).getComponent(0);
+        panel.add(completedCard, gbc);
+
+        gbc.gridx = 1;
+        JPanel pendingCard = createStatCard("⏳ Pending Tasks", "0", WARNING_COLOR);
+        pendingTasksLabel = (JLabel) ((JPanel) pendingCard.getComponent(1)).getComponent(0);
+        panel.add(pendingCard, gbc);
+
+        gbc.gridy = 3;
+
+        gbc.gridx = 0;
+        JPanel missedCard = createStatCard("❌ Missed Tasks", "0", DANGER_COLOR);
+        missedTasksLabel = (JLabel) ((JPanel) missedCard.getComponent(1)).getComponent(0);
+        panel.add(missedCard, gbc);
+
+        gbc.gridx = 1;
+        JPanel totalCard = createStatCard("📋 Total Tasks", "0", PRIMARY_COLOR);
+        totalTasksLabel = (JLabel) ((JPanel) totalCard.getComponent(1)).getComponent(0);
+        panel.add(totalCard, gbc);
+
+        gbc.gridy = 4;
+
+        gbc.gridx = 0;
+        JPanel streakCard = createStatCard("🔥 Current Streak", "0 days", WARNING_COLOR);
+        streakLabel = (JLabel) ((JPanel) streakCard.getComponent(1)).getComponent(0);
+        panel.add(streakCard, gbc);
+
+        gbc.gridx = 1;
+        JPanel lastCommitCard = createStatCard("📅 Last Commit", "Never", new Color(139, 92, 246));
+        lastCommitLabel = (JLabel) ((JPanel) lastCommitCard.getComponent(1)).getComponent(0);
+        panel.add(lastCommitCard, gbc);
+
+        return panel;
     }
 
-    private int calculateProgress(GitHubActivity activity) {
-        if (activity.getCommitCount() == 0) return 0;
-        return Math.min(100, activity.getCommitCount());
+    private JPanel createPlanCard() {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+
+        JLabel titleLabel = new JLabel("Active Study Plan");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        titleLabel.setForeground(TEXT_SECONDARY);
+
+        planNameLabel = new JLabel("Loading...");
+        planNameLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        planNameLabel.setForeground(PRIMARY_COLOR);
+
+        card.add(titleLabel, BorderLayout.NORTH);
+        card.add(planNameLabel, BorderLayout.CENTER);
+
+        return card;
     }
 
-    // Custom cell renderers
-    class RepositoryCellRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
+    private JPanel createProgressCard() {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
 
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            setBorder(new EmptyBorder(10, 15, 10, 15));
-            setFont(new Font("Segoe UI", Font.BOLD, 14));
-            setForeground(new Color(33, 33, 33));
+        JLabel titleLabel = new JLabel("Overall Progress");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        titleLabel.setForeground(TEXT_SECONDARY);
 
-            // Add repository icon
-            setText("📦 " + value.toString());
+        progressPercentageLabel = new JLabel("0%");
+        progressPercentageLabel.setFont(new Font("Segoe UI", Font.BOLD, 36));
+        progressPercentageLabel.setForeground(PRIMARY_COLOR);
+        progressPercentageLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
-            return c;
-        }
+        overallProgressBar = new JProgressBar(0, 100);
+        overallProgressBar.setStringPainted(true);
+        overallProgressBar.setForeground(PRIMARY_COLOR);
+        overallProgressBar.setBackground(new Color(224, 231, 255));
+        overallProgressBar.setBorderPainted(false);
+        overallProgressBar.setPreferredSize(new Dimension(200, 35));
+        overallProgressBar.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        card.add(titleLabel, BorderLayout.NORTH);
+        card.add(progressPercentageLabel, BorderLayout.CENTER);
+        card.add(overallProgressBar, BorderLayout.SOUTH);
+
+        return card;
     }
 
-    class ProgressCellRenderer extends DefaultTableCellRenderer {
-        private JProgressBar progressBar;
+    private JPanel createStatCard(String title, String value, Color accentColor) {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
 
-        public ProgressCellRenderer() {
-            progressBar = new JProgressBar(0, 100);
-            progressBar.setStringPainted(true);
-            progressBar.setBorderPainted(false);
-            progressBar.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            progressBar.setPreferredSize(new Dimension(100, 25));
-        }
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        titleLabel.setForeground(TEXT_SECONDARY);
 
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
+        JPanel valuePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        valuePanel.setBackground(CARD_BG);
 
-            int progress = Integer.parseInt(value.toString());
-            progressBar.setValue(progress);
+        JLabel valueLabel = new JLabel(value);
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        valueLabel.setForeground(accentColor);
 
-            if (progress >= 70) {
-                progressBar.setForeground(new Color(46, 204, 113));
-            } else if (progress >= 30) {
-                progressBar.setForeground(new Color(241, 196, 15));
-            } else {
-                progressBar.setForeground(new Color(220, 38, 38));
+        valuePanel.add(valueLabel);
+
+        card.add(titleLabel, BorderLayout.NORTH);
+        card.add(valuePanel, BorderLayout.CENTER);
+
+        return card;
+    }
+
+    private JPanel createChartsSection() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(BG_LIGHT);
+        panel.setBorder(new EmptyBorder(10, 0, 10, 0));
+
+        JPanel piePanel = createPieChartPanel();
+        piePanel.setMaximumSize(new Dimension(1200, 320));
+        panel.add(piePanel);
+        panel.add(Box.createVerticalStrut(20));
+
+        JPanel linePanel = createLineChartPanel();
+        linePanel.setMaximumSize(new Dimension(1200, 380));
+        panel.add(linePanel);
+        panel.add(Box.createVerticalStrut(20));
+
+        JPanel barPanel = createBarChartPanel();
+        barPanel.setMaximumSize(new Dimension(1200, 380));
+        panel.add(barPanel);
+
+        // Add Export CSV Button at the bottom
+        JPanel exportPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        exportPanel.setBackground(BG_LIGHT);
+        exportPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
+
+        JButton exportBtn = new JButton("📥 Download CSV Report");
+        exportBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        exportBtn.setBackground(SUCCESS_COLOR);
+        exportBtn.setForeground(Color.WHITE);
+        exportBtn.setBorderPainted(false);
+        exportBtn.setFocusPainted(false);
+        exportBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        exportBtn.setPreferredSize(new Dimension(200, 40));
+        exportBtn.addActionListener(e -> exportDataToCSV());
+
+        exportPanel.add(exportBtn);
+        panel.add(exportPanel);
+
+        return panel;
+    }
+
+    private JPanel createPieChartPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(CARD_BG);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(15, 15, 15, 15)
+        ));
+
+        JLabel titleLabel = new JLabel("📊 Task Status Distribution");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(PRIMARY_COLOR);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
+
+        DefaultPieDataset dataset = new DefaultPieDataset();
+
+        Integer activePlanId = user.getActivePlanId();
+        if (activePlanId != null) {
+            List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+            int completed = 0, pending = 0, missed = 0;
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) completed++;
+                else if ("MISSED".equals(task.getStatus())) missed++;
+                else pending++;
             }
-
-            progressBar.setString(progress + "%");
-            progressBar.setBackground(new Color(226, 232, 240));
-
-            JPanel panel = new JPanel(new GridBagLayout());
-            panel.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
-            panel.add(progressBar);
-
-            return panel;
+            dataset.setValue("Completed", completed);
+            dataset.setValue("Pending", pending);
+            dataset.setValue("Missed", missed);
         }
+
+        JFreeChart chart = ChartFactory.createPieChart("", dataset, true, true, false);
+        chart.setBackgroundPaint(Color.WHITE);
+        PiePlot plot = (PiePlot) chart.getPlot();
+        plot.setSectionPaint("Completed", SUCCESS_COLOR);
+        plot.setSectionPaint("Pending", WARNING_COLOR);
+        plot.setSectionPaint("Missed", DANGER_COLOR);
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setOutlinePaint(null);
+        plot.setShadowPaint(null);
+        plot.setLabelGenerator(null);
+
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setPreferredSize(new Dimension(400, 250));
+        chartPanel.setBorder(null);
+
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(chartPanel, BorderLayout.CENTER);
+
+        return panel;
     }
 
-    class DateCellRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
+    private JPanel createLineChartPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(CARD_BG);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(15, 15, 15, 15)
+        ));
 
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            setBorder(new EmptyBorder(10, 15, 10, 15));
-            setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        JLabel titleLabel = new JLabel("📈 Daily Progress Trend (Last 7 Days)");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(PRIMARY_COLOR);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
 
-            if (value != null) {
-                String date = value.toString();
-                if (date.equals("Never")) {
-                    setForeground(new Color(148, 163, 184));
-                } else {
-                    setForeground(new Color(33, 33, 33));
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+
+        Integer activePlanId = user.getActivePlanId();
+        if (activePlanId != null) {
+            List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+            Map<LocalDate, Integer> dailyCompleted = new HashMap<>();
+
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    dailyCompleted.put(task.getTaskDate(),
+                            dailyCompleted.getOrDefault(task.getTaskDate(), 0) + 1);
                 }
             }
 
-            return c;
+            LocalDate today = LocalDate.now();
+            for (int i = 6; i >= 0; i--) {
+                LocalDate date = today.minusDays(i);
+                int completed = dailyCompleted.getOrDefault(date, 0);
+                dataset.addValue(completed, "Tasks Completed", date.format(DateTimeFormatter.ofPattern("MM/dd")));
+            }
+        }
+
+        JFreeChart chart = ChartFactory.createLineChart(
+                "", "Date", "Tasks Completed",
+                dataset, PlotOrientation.VERTICAL, true, true, false);
+        chart.setBackgroundPaint(Color.WHITE);
+        CategoryPlot plot = chart.getCategoryPlot();
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setRangeGridlinePaint(new Color(200, 200, 200));
+        plot.setDomainGridlinePaint(new Color(200, 200, 200));
+
+        LineAndShapeRenderer renderer = (LineAndShapeRenderer) plot.getRenderer();
+        renderer.setSeriesPaint(0, PRIMARY_COLOR);
+        renderer.setSeriesShapesVisible(0, true);
+        renderer.setSeriesLinesVisible(0, true);
+        renderer.setSeriesShape(0, new java.awt.geom.Ellipse2D.Double(-4, -4, 8, 8));
+
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setPreferredSize(new Dimension(900, 300));
+        chartPanel.setBorder(null);
+
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(chartPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel createBarChartPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(CARD_BG);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(15, 15, 15, 15)
+        ));
+
+        JLabel titleLabel = new JLabel("📊 Weekly Completion Summary");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(PRIMARY_COLOR);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
+
+        panel.add(titleLabel, BorderLayout.NORTH);
+
+        // Create dataset with proper week labels
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+        Map<Integer, Integer> weeklyCompletedData = new LinkedHashMap<>();
+
+        Integer activePlanId = user.getActivePlanId();
+        if (activePlanId != null) {
+            List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+
+            LocalDate minDate = LocalDate.now();
+            LocalDate maxDate = LocalDate.now().minusDays(1);
+
+            for (StudyTask task : tasks) {
+                if (task.getTaskDate().isBefore(minDate)) minDate = task.getTaskDate();
+                if (task.getTaskDate().isAfter(maxDate)) maxDate = task.getTaskDate();
+            }
+
+            LocalDate startOfYear = LocalDate.of(minDate.getYear(), 1, 1);
+
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    int week = (int)((task.getTaskDate().toEpochDay() - startOfYear.toEpochDay()) / 7) + 1;
+                    weeklyCompletedData.put(week, weeklyCompletedData.getOrDefault(week, 0) + 1);
+                }
+            }
+
+            for (Map.Entry<Integer, Integer> entry : weeklyCompletedData.entrySet()) {
+                dataset.addValue(entry.getValue(), "Completed", "Week " + entry.getKey());
+            }
+        }
+
+        JFreeChart chart = ChartFactory.createBarChart(
+                "", "Week", "Tasks Completed",
+                dataset, PlotOrientation.VERTICAL, true, true, false);
+
+        chart.setBackgroundPaint(Color.WHITE);
+        CategoryPlot plot = chart.getCategoryPlot();
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setRangeGridlinePaint(new Color(200, 200, 200));
+        plot.setDomainGridlinePaint(new Color(200, 200, 200));
+
+        // Custom Bar Renderer with gradient colors
+        BarRenderer renderer = new BarRenderer() {
+            private Color[] gradientColors = {
+                    new Color(79, 70, 229),  // Blue
+                    new Color(34, 197, 94),   // Green
+                    new Color(245, 158, 11),  // Orange
+                    new Color(239, 68, 68)    // Red
+            };
+
+            @Override
+            public Paint getItemPaint(int row, int column) {
+                return gradientColors[column % gradientColors.length];
+            }
+        };
+
+        renderer.setShadowVisible(false);
+        renderer.setDrawBarOutline(false);
+        renderer.setMaximumBarWidth(0.15);
+        renderer.setDefaultItemLabelGenerator(new org.jfree.chart.labels.StandardCategoryItemLabelGenerator());
+        renderer.setDefaultItemLabelsVisible(true);
+        renderer.setDefaultItemLabelFont(new Font("Segoe UI", Font.BOLD, 11));
+        renderer.setDefaultItemLabelPaint(new Color(51, 51, 51));
+
+        plot.setRenderer(renderer);
+
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setPreferredSize(new Dimension(900, 300));
+        chartPanel.setBorder(null);
+
+        // Add tooltip support for bar chart using ChartPanel's tooltip
+        chartPanel.setToolTipText("");
+        chartPanel.addChartMouseListener(new org.jfree.chart.ChartMouseListener() {
+            @Override
+            public void chartMouseClicked(org.jfree.chart.ChartMouseEvent event) {}
+
+            @Override
+            public void chartMouseMoved(org.jfree.chart.ChartMouseEvent event) {
+                org.jfree.chart.entity.ChartEntity entity = event.getEntity();
+                if (entity instanceof org.jfree.chart.entity.CategoryItemEntity) {
+                    org.jfree.chart.entity.CategoryItemEntity item = (org.jfree.chart.entity.CategoryItemEntity) entity;
+                    Comparable week = item.getColumnKey();
+                    Number value = item.getDataset().getValue(item.getRowKey(), item.getColumnKey());
+                    if (value != null) {
+                        chartPanel.setToolTipText("<html><body style='width:200px; padding:5px;'>" +
+                                "<b>Week:</b> " + week.toString() + "<br>" +
+                                "<b>Tasks Completed:</b> " + value.intValue() + "<br>" +
+                                "<b>Contribution:</b> " + value.intValue() + " task(s) completed</body></html>");
+                    }
+                } else {
+                    chartPanel.setToolTipText(null);
+                }
+            }
+        });
+
+        panel.add(chartPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private void exportDataToCSV() {
+        try {
+            Integer activePlanId = user.getActivePlanId();
+            if (activePlanId == null) {
+                JOptionPane.showMessageDialog(this, "No active plan selected. Please activate a plan first.", "No Data", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+            if (tasks.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No tasks found for the active plan.", "No Data", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Open file chooser for user to select save location
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Save CSV Report");
+            fileChooser.setSelectedFile(new File("study_progress_report_" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".csv"));
+
+            int userSelection = fileChooser.showSaveDialog(this);
+            if (userSelection != JFileChooser.APPROVE_OPTION) {
+                return; // User cancelled
+            }
+
+            String filePath = fileChooser.getSelectedFile().getAbsolutePath();
+            if (!filePath.endsWith(".csv")) {
+                filePath += ".csv";
+            }
+
+            // Create CSV content
+            StringBuilder csvContent = new StringBuilder();
+
+            // Sheet 1: Daily Progress Data
+            csvContent.append("DAILY PROGRESS DATA\n");
+            csvContent.append("Date,Tasks Completed\n");
+
+            Map<LocalDate, Integer> dailyCompleted = new TreeMap<>();
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    dailyCompleted.put(task.getTaskDate(),
+                            dailyCompleted.getOrDefault(task.getTaskDate(), 0) + 1);
+                }
+            }
+
+            LocalDate today = LocalDate.now();
+            for (int i = 6; i >= 0; i--) {
+                LocalDate date = today.minusDays(i);
+                int completed = dailyCompleted.getOrDefault(date, 0);
+                csvContent.append(date).append(",").append(completed).append("\n");
+            }
+
+            csvContent.append("\n");
+
+            // Sheet 2: Weekly Summary Data
+            csvContent.append("WEEKLY SUMMARY DATA\n");
+            csvContent.append("Week,Tasks Completed\n");
+
+            LocalDate minDate = LocalDate.now();
+            LocalDate maxDate = LocalDate.now().minusDays(1);
+            for (StudyTask task : tasks) {
+                if (task.getTaskDate().isBefore(minDate)) minDate = task.getTaskDate();
+                if (task.getTaskDate().isAfter(maxDate)) maxDate = task.getTaskDate();
+            }
+
+            LocalDate startOfYear = LocalDate.of(minDate.getYear(), 1, 1);
+            Map<Integer, Integer> weeklyCompleted = new TreeMap<>();
+
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) {
+                    int week = (int)((task.getTaskDate().toEpochDay() - startOfYear.toEpochDay()) / 7) + 1;
+                    weeklyCompleted.put(week, weeklyCompleted.getOrDefault(week, 0) + 1);
+                }
+            }
+
+            for (Map.Entry<Integer, Integer> entry : weeklyCompleted.entrySet()) {
+                csvContent.append("Week ").append(entry.getKey()).append(",").append(entry.getValue()).append("\n");
+            }
+
+            csvContent.append("\n");
+
+            // Sheet 3: Task Status Distribution
+            csvContent.append("TASK STATUS DISTRIBUTION\n");
+            csvContent.append("Status,Count\n");
+
+            int completed = 0, pending = 0, missed = 0;
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus())) completed++;
+                else if ("MISSED".equals(task.getStatus())) missed++;
+                else pending++;
+            }
+
+            csvContent.append("Completed,").append(completed).append("\n");
+            csvContent.append("Pending,").append(pending).append("\n");
+            csvContent.append("Missed,").append(missed).append("\n");
+
+            csvContent.append("\n");
+
+            // Sheet 4: Overall Stats
+            csvContent.append("OVERALL STATISTICS\n");
+            csvContent.append("Metric,Value\n");
+            csvContent.append("Total Tasks,").append(tasks.size()).append("\n");
+            csvContent.append("Completed Tasks,").append(completed).append("\n");
+            csvContent.append("Pending Tasks,").append(pending).append("\n");
+            csvContent.append("Missed Tasks,").append(missed).append("\n");
+
+            int progress = tasks.size() > 0 ? (completed * 100 / tasks.size()) : 0;
+            csvContent.append("Overall Progress (%),").append(progress).append("\n");
+
+            // Calculate streak
+            int streak = 0;
+            LocalDate checkDate = LocalDate.now().minusDays(1);
+            while (true) {
+                final LocalDate currentDate = checkDate;
+                boolean hasCompletion = tasks.stream()
+                        .anyMatch(t -> "COMPLETED".equals(t.getStatus()) && t.getTaskDate().equals(currentDate));
+                if (hasCompletion) {
+                    streak++;
+                    checkDate = checkDate.minusDays(1);
+                } else {
+                    break;
+                }
+            }
+            csvContent.append("Current Streak (days),").append(streak).append("\n");
+
+            // Save file
+            java.io.FileWriter fileWriter = new java.io.FileWriter(filePath);
+            fileWriter.write(csvContent.toString());
+            fileWriter.close();
+
+            // Ask user if they want to open the file
+            int openFile = JOptionPane.showConfirmDialog(this,
+                    "✅ Report exported successfully!\n\nFile saved to:\n" + filePath + "\n\nDo you want to open the file?",
+                    "Export Complete",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (openFile == JOptionPane.YES_OPTION) {
+                // Open the file with default application (Excel)
+                Desktop.getDesktop().open(new File(filePath));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error exporting data: " + e.getMessage(), "Export Failed", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    class StatusCellRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int column) {
+    private void loadProgressData() {
+        Integer activePlanId = user.getActivePlanId();
 
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
-            JPanel panel = new JPanel(new GridBagLayout());
-            panel.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
-
-            JLabel badge = new JLabel();
-            badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            badge.setBorder(new EmptyBorder(5, 15, 5, 15));
-            badge.setOpaque(true);
-
-            String status = value.toString();
-            switch (status) {
-                case "Green":
-                    badge.setText("● Active");
-                    badge.setForeground(Color.WHITE);
-                    badge.setBackground(new Color(46, 204, 113));
-                    break;
-                case "Yellow":
-                    badge.setText("● Delayed");
-                    badge.setForeground(new Color(33, 33, 33));
-                    badge.setBackground(new Color(241, 196, 15));
-                    break;
-                case "Red":
-                    badge.setText("● Missed");
-                    badge.setForeground(Color.WHITE);
-                    badge.setBackground(new Color(220, 38, 38));
-                    break;
-                default:
-                    badge.setText("● Unknown");
-                    badge.setForeground(Color.WHITE);
-                    badge.setBackground(new Color(148, 163, 184));
-            }
-
-            badge.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(badge.getBackground().darker(), 1, true),
-                    new EmptyBorder(5, 15, 5, 15)
-            ));
-
-            panel.add(badge);
-            return panel;
+        if (activePlanId == null) {
+            planNameLabel.setText("No active plan selected");
+            totalTasksLabel.setText("0");
+            completedTasksLabel.setText("0");
+            pendingTasksLabel.setText("0");
+            missedTasksLabel.setText("0");
+            progressPercentageLabel.setText("0%");
+            overallProgressBar.setValue(0);
+            streakLabel.setText("0 days");
+            lastCommitLabel.setText("Never");
+            updateCharts();
+            return;
         }
+
+        StudyPlan activePlan = planDAO.findById(activePlanId);
+        if (activePlan == null) {
+            planNameLabel.setText("Plan not found");
+            return;
+        }
+
+        String displayName = activePlan.getPlanName();
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = activePlan.getRepositoryName();
+        }
+        planNameLabel.setText(displayName != null ? displayName : "Active Plan");
+
+        List<StudyTask> tasks = taskDAO.findByGoalId(activePlanId);
+        int totalTasks = tasks.size();
+        int completedTasks = 0;
+        int pendingTasks = 0;
+        int missedTasks = 0;
+        int streak = 0;
+        LocalDate lastCommitDate = null;
+
+        for (StudyTask task : tasks) {
+            if ("COMPLETED".equals(task.getStatus())) {
+                completedTasks++;
+                if (task.getActualCommits() > 0) {
+                    if (lastCommitDate == null || task.getTaskDate().isAfter(lastCommitDate)) {
+                        lastCommitDate = task.getTaskDate();
+                    }
+                }
+            } else if ("MISSED".equals(task.getStatus())) {
+                missedTasks++;
+            } else {
+                pendingTasks++;
+            }
+        }
+
+        int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < 30; i++) {
+            LocalDate checkDate = today.minusDays(i);
+            boolean hasCompletion = false;
+            for (StudyTask task : tasks) {
+                if ("COMPLETED".equals(task.getStatus()) && task.getTaskDate().equals(checkDate)) {
+                    hasCompletion = true;
+                    break;
+                }
+            }
+            if (hasCompletion) {
+                streak++;
+            } else {
+                break;
+            }
+        }
+
+        totalTasksLabel.setText(String.valueOf(totalTasks));
+        completedTasksLabel.setText(String.valueOf(completedTasks));
+        pendingTasksLabel.setText(String.valueOf(pendingTasks));
+        missedTasksLabel.setText(String.valueOf(missedTasks));
+        progressPercentageLabel.setText(progress + "%");
+        overallProgressBar.setValue(progress);
+        overallProgressBar.setString(progress + "% (" + completedTasks + "/" + totalTasks + ")");
+        streakLabel.setText(streak + " days");
+
+        if (lastCommitDate != null) {
+            long daysAgo = java.time.temporal.ChronoUnit.DAYS.between(lastCommitDate, LocalDate.now());
+            if (daysAgo == 0) {
+                lastCommitLabel.setText("Today");
+            } else if (daysAgo == 1) {
+                lastCommitLabel.setText("Yesterday");
+            } else {
+                lastCommitLabel.setText(daysAgo + " days ago");
+            }
+        } else {
+            lastCommitLabel.setText("Never");
+        }
+
+        updateCharts();
+    }
+
+    private void updateCharts() {
+        if (chartsPanel != null) {
+            mainContentPanel.remove(chartsPanel);
+        }
+
+        chartsPanel = createChartsSection();
+        mainContentPanel.add(chartsPanel);
+
+        mainContentPanel.revalidate();
+        mainContentPanel.repaint();
     }
 
     public JPanel getMainPanel() {

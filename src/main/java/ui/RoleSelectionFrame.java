@@ -6,6 +6,8 @@ import enums.UserRole;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 public class RoleSelectionFrame extends JFrame {
 
@@ -55,7 +57,7 @@ public class RoleSelectionFrame extends JFrame {
         // Role cards
         JPanel cardsPanel = new JPanel(new GridLayout(1, 2, 20, 0));
         cardsPanel.setBackground(Color.WHITE);
-        cardsPanel.setMaximumSize(new Dimension(600, 200));
+        cardsPanel.setMaximumSize(new Dimension(600, 250));
 
         // Normal Student Card
         JPanel normalCard = createRoleCard(
@@ -69,13 +71,22 @@ public class RoleSelectionFrame extends JFrame {
                 new Color(52, 152, 219)
         );
 
-        normalCard.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                user.setRole(UserRole.NORMAL);
-                new NormalStudyPlannerFrame(user).setVisible(true);
-                dispose();
-            }
+        JButton normalBtn = new JButton("Select Normal Student");
+        normalBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        normalBtn.setBackground(new Color(52, 152, 219));
+        normalBtn.setForeground(Color.WHITE);
+        normalBtn.setBorderPainted(false);
+        normalBtn.setFocusPainted(false);
+        normalBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        normalBtn.setMaximumSize(new Dimension(180, 30));
+        normalBtn.addActionListener(e -> {
+            user.setRole(UserRole.NORMAL);
+            new NormalStudyPlannerFrame(user).setVisible(true);
+            dispose();
         });
+
+        normalCard.add(Box.createVerticalStrut(10));
+        normalCard.add(normalBtn);
 
         // IT Student Card
         JPanel itCard = createRoleCard(
@@ -89,13 +100,22 @@ public class RoleSelectionFrame extends JFrame {
                 new Color(46, 204, 113)
         );
 
-        itCard.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                user.setRole(UserRole.IT);
-                new ITStudyPlannerFrame(user).setVisible(true);
-                dispose();
-            }
+        JButton itBtn = new JButton("Select IT Student");
+        itBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        itBtn.setBackground(new Color(46, 204, 113));
+        itBtn.setForeground(Color.WHITE);
+        itBtn.setBorderPainted(false);
+        itBtn.setFocusPainted(false);
+        itBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        itBtn.setMaximumSize(new Dimension(180, 30));
+        itBtn.addActionListener(e -> {
+            user.setRole(UserRole.IT);
+            new ITStudyPlannerFrame(user).setVisible(true);
+            dispose();
         });
+
+        itCard.add(Box.createVerticalStrut(10));
+        itCard.add(itBtn);
 
         cardsPanel.add(normalCard);
         cardsPanel.add(itCard);
@@ -123,9 +143,8 @@ public class RoleSelectionFrame extends JFrame {
         card.setBackground(Color.WHITE);
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(226, 232, 240), 1),
-                new EmptyBorder(20, 20, 20, 20)
+                new EmptyBorder(20, 20, 10, 20)
         ));
-        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));

@@ -1,7 +1,6 @@
 package dao;
 
 import db.DBConnection;
-import enums.UserRole;
 import model.User;
 
 import java.sql.*;
@@ -17,8 +16,13 @@ public class UserDAO {
                 "name = VALUES(name), role = VALUES(role), github_username = VALUES(github_username), " +
                 "access_token = VALUES(access_token), avatar_url = VALUES(avatar_url), active_plan_id = VALUES(active_plan_id)";
 
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
 
             stmt.setString(1, user.getName());
             stmt.setString(2, user.getEmail());
@@ -27,13 +31,18 @@ public class UserDAO {
             stmt.setString(5, user.getGithubUsername());
             stmt.setString(6, user.getAccessToken());
             stmt.setString(7, user.getAvatarUrl());
-            stmt.setObject(8, user.getActivePlanId(), Types.INTEGER); // can be null
+
+            if (user.getActivePlanId() != null) {
+                stmt.setInt(8, user.getActivePlanId());
+            } else {
+                stmt.setNull(8, Types.INTEGER);
+            }
 
             int affectedRows = stmt.executeUpdate();
             System.out.println("UserDAO.save: affectedRows = " + affectedRows);
 
             // Try to get generated keys (for new insert)
-            ResultSet rs = stmt.getGeneratedKeys();
+            rs = stmt.getGeneratedKeys();
             if (rs.next()) {
                 user.setId(rs.getInt(1));
                 System.out.println("✅ Generated new user ID: " + user.getId());
@@ -50,27 +59,89 @@ public class UserDAO {
             }
 
             return user;
+
         } catch (SQLException e) {
-            System.err.println("Database error in UserDAO.save: " + e.getMessage());
+            System.err.println("❌ Database error in UserDAO.save: " + e.getMessage());
             e.printStackTrace();
             return null;
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public boolean update(User user) {
+        String sql = "UPDATE users SET name = ?, role = ?, oauth_provider = ?, " +
+                "github_username = ?, access_token = ?, avatar_url = ?, active_plan_id = ? WHERE id = ?";
+
+        Connection conn = null;
+        PreparedStatement stmt = null;
+
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
+
+            stmt.setString(1, user.getName());
+            stmt.setString(2, user.getRole().name());
+            stmt.setString(3, user.getOauthProvider());
+            stmt.setString(4, user.getGithubUsername());
+            stmt.setString(5, user.getAccessToken());
+            stmt.setString(6, user.getAvatarUrl());
+
+            if (user.getActivePlanId() != null) {
+                stmt.setInt(7, user.getActivePlanId());
+            } else {
+                stmt.setNull(7, Types.INTEGER);
+            }
+
+            stmt.setInt(8, user.getId());
+
+            int rowsAffected = stmt.executeUpdate();
+            System.out.println("✅ Updated user " + user.getId() + ": " + rowsAffected + " rows");
+
+            return rowsAffected > 0;
+
+        } catch (SQLException e) {
+            System.err.println("❌ SQL Error updating user: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     public User findByEmail(String email) {
         String sql = "SELECT * FROM users WHERE email = ?";
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
 
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
             stmt.setString(1, email);
-            ResultSet rs = stmt.executeQuery();
+            rs = stmt.executeQuery();
 
             if (rs.next()) {
                 return mapResultSetToUser(rs);
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
         return null;
@@ -78,34 +149,60 @@ public class UserDAO {
 
     public User findById(int id) {
         String sql = "SELECT * FROM users WHERE id = ?";
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
 
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
             stmt.setInt(1, id);
-            ResultSet rs = stmt.executeQuery();
+            rs = stmt.executeQuery();
 
             if (rs.next()) {
                 return mapResultSetToUser(rs);
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
         return null;
     }
 
+    // Add this method to UserDAO.java (after findById method)
+    public User saveOrUpdate(User user) {
+        return save(user); // Your save method already handles update via ON DUPLICATE KEY
+    }
     public int getUserIdByEmail(String email) {
         String sql = "SELECT id FROM users WHERE email = ?";
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
             stmt.setString(1, email);
-            ResultSet rs = stmt.executeQuery();
+            rs = stmt.executeQuery();
             if (rs.next()) {
                 return rs.getInt("id");
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
         return -1;
     }
@@ -113,46 +210,41 @@ public class UserDAO {
     public List<User> findAll() {
         List<User> users = new ArrayList<>();
         String sql = "SELECT * FROM users";
+        Connection conn = null;
+        Statement stmt = null;
+        ResultSet rs = null;
 
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.createStatement();
+            rs = stmt.executeQuery(sql);
 
             while (rs.next()) {
                 users.add(mapResultSetToUser(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
         return users;
     }
 
-    public void update(User user) {
-        String sql = "UPDATE users SET name = ?, role = ?, github_username = ?, access_token = ?, avatar_url = ?, active_plan_id = ? WHERE id = ?";
-
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, user.getName());
-            stmt.setString(2, user.getRole().name());
-            stmt.setString(3, user.getGithubUsername());
-            stmt.setString(4, user.getAccessToken());
-            stmt.setString(5, user.getAvatarUrl());
-            stmt.setObject(6, user.getActivePlanId(), Types.INTEGER);
-            stmt.setInt(7, user.getId());
-
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // ✅ New method to update only the active plan
     public void updateActivePlan(int userId, Integer planId) {
         String sql = "UPDATE users SET active_plan_id = ? WHERE id = ?";
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
+
             if (planId == null) {
                 stmt.setNull(1, Types.INTEGER);
             } else {
@@ -163,21 +255,38 @@ public class UserDAO {
             System.out.println("UserDAO.updateActivePlan: user " + userId + " active plan set to " + planId);
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    // ✅ New method to get active plan ID
     public Integer getActivePlanId(int userId) {
         String sql = "SELECT active_plan_id FROM users WHERE id = ?";
-        try (Connection conn = DBConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DBConnection.getInstance().getConnection();
+            stmt = conn.prepareStatement(sql);
             stmt.setInt(1, userId);
-            ResultSet rs = stmt.executeQuery();
+            rs = stmt.executeQuery();
             if (rs.next()) {
                 return rs.getInt("active_plan_id");
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
         return null;
     }
@@ -192,13 +301,14 @@ public class UserDAO {
         user.setGithubUsername(rs.getString("github_username"));
         user.setAccessToken(rs.getString("access_token"));
         user.setAvatarUrl(rs.getString("avatar_url"));
-        // Assuming User model has activePlanId field
+
         int activePlanId = rs.getInt("active_plan_id");
         if (!rs.wasNull()) {
             user.setActivePlanId(activePlanId);
         } else {
             user.setActivePlanId(null);
         }
+
         return user;
     }
 }

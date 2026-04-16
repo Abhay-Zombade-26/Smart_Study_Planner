@@ -35,6 +35,8 @@ public class TopicDAO {
                 topic.setId(rs.getInt(1));
                 System.out.println("Generated topic ID: " + topic.getId());
             }
+            rs.close();
+
             return topic;
 
         } catch (SQLException e) {
@@ -57,6 +59,7 @@ public class TopicDAO {
             if (rs.next()) {
                 return mapResultSetToTopic(rs);
             }
+            rs.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -77,6 +80,7 @@ public class TopicDAO {
             while (rs.next()) {
                 topics.add(mapResultSetToTopic(rs));
             }
+            rs.close();
 
             System.out.println("Found " + topics.size() + " topics for plan ID: " + planId);
         } catch (SQLException e) {
@@ -153,11 +157,33 @@ public class TopicDAO {
         Topic topic = new Topic();
         topic.setId(rs.getInt("id"));
         topic.setPlanId(rs.getInt("plan_id"));
-        topic.setSubject(rs.getString("subject"));
+
+        try {
+            topic.setSubject(rs.getString("subject"));
+        } catch (SQLException e) {
+            topic.setSubject("");
+        }
+
         topic.setName(rs.getString("name"));
-        topic.setDifficulty(rs.getInt("difficulty"));
-        topic.setSize(rs.getInt("size"));
-        topic.setWeight(rs.getDouble("weight"));
+
+        try {
+            topic.setDifficulty(rs.getInt("difficulty"));
+        } catch (SQLException e) {
+            topic.setDifficulty(3);
+        }
+
+        try {
+            topic.setSize(rs.getInt("size"));
+        } catch (SQLException e) {
+            topic.setSize(1);
+        }
+
+        try {
+            topic.setWeight(rs.getDouble("weight"));
+        } catch (SQLException e) {
+            topic.setWeight(1.0);
+        }
+
         return topic;
     }
 }

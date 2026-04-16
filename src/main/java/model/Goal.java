@@ -1,6 +1,7 @@
 package model;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 public class Goal {
     private int id;
@@ -16,10 +17,12 @@ public class Goal {
     private int targetCommits;
     private int currentCommits;
     private String status;
-    
+    private String projectType; // NEW FIELD: SPRING_BOOT, REACT, etc.
+    private Map<String, Object> analysisResults; // NEW FIELD: Store project analysis
+
     public Goal() {}
-    
-    public Goal(int userId, String repositoryName, String priority, String targetFeatures, 
+
+    public Goal(int userId, String repositoryName, String priority, String targetFeatures,
                 int durationMonths, int dailyHours, String experienceLevel) {
         this.userId = userId;
         this.repositoryName = repositoryName;
@@ -33,48 +36,57 @@ public class Goal {
         this.status = "ACTIVE";
         this.targetCommits = durationMonths * 30;
         this.currentCommits = 0;
+        this.projectType = "UNKNOWN";
+        this.analysisResults = null;
     }
-    
+
     // Getters and Setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
-    
+
     public int getUserId() { return userId; }
     public void setUserId(int userId) { this.userId = userId; }
-    
+
     public String getRepositoryName() { return repositoryName; }
     public void setRepositoryName(String repositoryName) { this.repositoryName = repositoryName; }
-    
+
     public String getPriority() { return priority; }
     public void setPriority(String priority) { this.priority = priority; }
-    
+
     public String getTargetFeatures() { return targetFeatures; }
     public void setTargetFeatures(String targetFeatures) { this.targetFeatures = targetFeatures; }
-    
+
     public int getDurationMonths() { return durationMonths; }
     public void setDurationMonths(int durationMonths) { this.durationMonths = durationMonths; }
-    
+
     public int getDailyHours() { return dailyHours; }
     public void setDailyHours(int dailyHours) { this.dailyHours = dailyHours; }
-    
+
     public String getExperienceLevel() { return experienceLevel; }
     public void setExperienceLevel(String experienceLevel) { this.experienceLevel = experienceLevel; }
-    
+
     public LocalDate getStartDate() { return startDate; }
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
-    
+
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
-    
+
     public int getTargetCommits() { return targetCommits; }
     public void setTargetCommits(int targetCommits) { this.targetCommits = targetCommits; }
-    
+
     public int getCurrentCommits() { return currentCommits; }
     public void setCurrentCommits(int currentCommits) { this.currentCommits = currentCommits; }
-    
+
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-    
+
+    // NEW GETTERS AND SETTERS
+    public String getProjectType() { return projectType; }
+    public void setProjectType(String projectType) { this.projectType = projectType; }
+
+    public Map<String, Object> getAnalysisResults() { return analysisResults; }
+    public void setAnalysisResults(Map<String, Object> analysisResults) { this.analysisResults = analysisResults; }
+
     public double getPriorityWeight() {
         switch(priority) {
             case "HIGH": return 1.5;
@@ -83,7 +95,7 @@ public class Goal {
             default: return 1.0;
         }
     }
-    
+
     public double getExperienceMultiplier() {
         switch(experienceLevel) {
             case "BEGINNER": return 1.5; // Takes 50% longer
@@ -92,7 +104,7 @@ public class Goal {
             default: return 1.0;
         }
     }
-    
+
     public String[] getFeatureList() {
         if (targetFeatures == null || targetFeatures.isEmpty()) {
             return new String[0];

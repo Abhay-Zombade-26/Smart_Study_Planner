@@ -4,8 +4,8 @@ import model.GitHubActivity;
 import model.User;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.json.JSONException;
 import util.HttpUtil;
-import util.JsonUtil;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -23,18 +23,32 @@ public class GitHubService {
         List<Map<String, String>> repos = new ArrayList<>();
 
         Map<String, String> headers = getHeaders();
-        String response = HttpUtil.sendGet("https://api.github.com/user/repos?sort=updated&per_page=100", headers);
+        String response = HttpUtil.sendGet("https://api.github.com/user/repos?sort=updated&per_page=100&type=all", headers);
 
-        JSONArray reposArray = JsonUtil.parseArray(response);
+        try {
+            // Try to parse as JSONArray first
+            JSONArray reposArray = new JSONArray(response);
 
-        for (int i = 0; i < reposArray.length(); i++) {
-            JSONObject repo = reposArray.getJSONObject(i);
-            Map<String, String> repoInfo = new HashMap<>();
-            repoInfo.put("name", repo.getString("full_name"));
-            repoInfo.put("private", String.valueOf(repo.getBoolean("private")));
-            repoInfo.put("updated_at", repo.getString("updated_at"));
-            repoInfo.put("html_url", repo.getString("html_url"));
-            repos.add(repoInfo);
+            for (int i = 0; i < reposArray.length(); i++) {
+                JSONObject repo = reposArray.getJSONObject(i);
+                Map<String, String> repoInfo = new HashMap<>();
+                repoInfo.put("name", repo.getString("full_name"));
+                repoInfo.put("private", String.valueOf(repo.getBoolean("private")));
+                repoInfo.put("updated_at", repo.getString("updated_at"));
+                repoInfo.put("html_url", repo.getString("html_url"));
+                repoInfo.put("description", repo.optString("description", "No description"));
+                repos.add(repoInfo);
+            }
+        } catch (JSONException e) {
+            // If it's not an array, try to parse as an object (error response)
+            try {
+                JSONObject errorObj = new JSONObject(response);
+                System.err.println("GitHub API Error: " + errorObj.toString());
+                throw new IOException("GitHub API returned an error: " + errorObj.optString("message", "Unknown error"));
+            } catch (JSONException ex) {
+                // If it's neither, rethrow the original error
+                throw new IOException("Failed to parse GitHub response: " + response.substring(0, Math.min(100, response.length())));
+            }
         }
 
         return repos;
@@ -45,11 +59,11 @@ public class GitHubService {
 
         try {
             String response = HttpUtil.sendGet(
-                    String.format("https://api.github.com/repos/%s/%s/commits?per_page=100", owner, repo),
+                    String.format("https://api.github.com/repos/%s/%s/commits?per_page=100&sort=author-date", owner, repo),
                     headers
             );
 
-            JSONArray commits = JsonUtil.parseArray(response);
+            JSONArray commits = new JSONArray(response);
 
             int totalCommits = commits.length();
             LocalDate lastCommitDate = null;
@@ -85,9 +99,14 @@ public class GitHubService {
 
             return activity;
 
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw e;
+        } catch (JSONException e) {
+            if (e.getMessage().contains("403")) {
+                throw new IOException("GitHub API rate limit exceeded. Please try again later.", e);
+            } else if (e.getMessage().contains("404")) {
+                throw new IOException("Repository not found or no commits available.", e);
+            } else {
+                throw new IOException("Failed to parse commit data: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -112,7 +131,7 @@ public class GitHubService {
 
         LocalDate today = LocalDate.now();
         if (lastCommit.equals(today)) return 1;
-        if (lastCommit.equals(today.minusDays(1))) return 2;
+        if (lastCommit.equals(today.minusDays(1))) return 1;
         return 0;
     }
 
@@ -157,6 +176,7 @@ public class GitHubService {
         Map<String, String> headers = new HashMap<>();
         headers.put("Authorization", "Bearer " + accessToken);
         headers.put("Accept", "application/vnd.github.v3+json");
+        headers.put("User-Agent", "Smart-Study-Planner");
         return headers;
     }
 }
