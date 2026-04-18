@@ -493,12 +493,3 @@ git push origin feature/your-feature-name
 Please use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`
 
 ---
-
-## 🐛 Known Issues
-
-- GitHub commit sync may be delayed up to 15 minutes after first login
-- AI plan generation for durations shorter than 7 days may produce overlapping tasks
-- JFreeChart charts may flicker briefly on first render on lower-end systems
-- Google OAuth requires an active internet connection even in local development mode
-
----
